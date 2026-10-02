@@ -1,0 +1,7 @@
+RAG1 es una aplicación de consola construida con TypeScript y Node.js.
+Usará Ollama para generar embeddings y respuestas basadas en documentos.
+El primer paso consiste en leer archivos de texto codificados en UTF-8.
+
+En próximos pasos, el indexado dividirá los documentos en fragmentos y generará un embedding para cada uno. Guardaremos los fragmentos y sus embeddings en un archivo JSON para poder reutilizarlos en las consultas posteriores.
+
+Al consultar, generaremos el embedding de la pregunta y buscaremos los fragmentos más similares mediante similitud coseno. El modelo recibirá los fragmentos seleccionados y deberá responder con citas o reconocer cuándo falta información.
