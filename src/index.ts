@@ -1,8 +1,6 @@
 import { join, parse } from "node:path";
-import type { EmbeddingGenerator } from "./application/ports/embedding-generator.js";
 import type { IndexRepository } from "./application/ports/index-repository.js";
-import { chunkText } from "./domain/chunk-text.js";
-import type { DocumentIndex, IndexedChunk } from "./domain/document-index.js";
+import { indexDocument } from "./application/index-document.js";
 import { readTextFile } from "./infrastructure/files/read-text-file.js";
 import { JsonIndexRepository } from "./infrastructure/files/json-index-repository.js";
 import { OllamaEmbeddingGenerator } from "./infrastructure/ollama/ollama-embedding-generator.js";
@@ -77,58 +75,44 @@ async function main(): Promise<void> {
       return;
     }
 
-    const maxChars = 500;
-    const embeddingModel = "qwen3-embedding:0.6b";
     const content = await readTextFile(filePath);
-    const chunks = chunkText(content, maxChars);
+    const indexPath = join("data", `${parse(filePath).name}.json`);
+    const repository: IndexRepository = new JsonIndexRepository(indexPath);
 
-    if (chunks.length === 0) {
+    console.log("Indexando documento...");
+
+    const documentIndex = await indexDocument(
+      {
+        source: filePath,
+        text: content,
+        embeddingModel: "qwen3-embedding:0.6b",
+        maxChars: 500,
+      },
+      {
+        repository,
+        createEmbeddingGenerator: (model) =>
+          new OllamaEmbeddingGenerator(model),
+      },
+    );
+
+    if (documentIndex === null) {
       console.log("El archivo está vacío o solo contiene espacios.");
       return;
     }
 
-    console.log(`Fragmentos generados: ${chunks.length}`);
+    console.log(`Fragmentos generados: ${documentIndex.chunks.length}`);
 
-    const embeddingGenerator: EmbeddingGenerator = new OllamaEmbeddingGenerator(embeddingModel);
-    const indexedChunks: IndexedChunk[] = [];
-    let expectedDimensions: number | undefined;
-
-    for (const [index, chunk] of chunks.entries()) {
-      console.log(`\nFragmento ${index + 1} (${chunk.length} caracteres):`);
-      console.log(chunk);
-      console.log("Generando embedding...");
-
-      const embedding = await embeddingGenerator.generate(chunk);
-
-      if (expectedDimensions !== undefined && embedding.length !== expectedDimensions) {
-        throw new Error(
-          `El fragmento ${index + 1} tiene un embedding de ${embedding.length} dimensiones; se esperaban ${expectedDimensions}.`,
-        );
-      }
-
-      expectedDimensions = embedding.length;
-      indexedChunks.push({ index, text: chunk, embedding });
-      console.log(`Embedding válido: ${embedding.length} dimensiones.`);
+    for (const chunk of documentIndex.chunks) {
+      console.log(`\nFragmento ${chunk.index + 1} (${chunk.text.length} caracteres):`);
+      console.log(chunk.text);
+      console.log(`Embedding válido: ${chunk.embedding.length} dimensiones.`);
     }
-
-    const documentIndex: DocumentIndex = {
-      version: 1,
-      source: filePath,
-      embeddingModel,
-      dimensions: indexedChunks[0].embedding.length,
-      chunking: { maxChars, overlapChars: 0 },
-      chunks: indexedChunks,
-    };
 
     console.log(`\nÍndice en memoria: ${documentIndex.chunks.length} fragmentos con sus embeddings.`);
     console.log(`Origen: ${documentIndex.source}`);
     console.log(`Modelo: ${documentIndex.embeddingModel}`);
     console.log(`Dimensiones: ${documentIndex.dimensions}`);
 
-    const indexPath = join("data", `${parse(filePath).name}.json`);
-    const repository: IndexRepository = new JsonIndexRepository(indexPath);
-
-    await repository.save(documentIndex);
     console.log(`Índice guardado en: ${indexPath}`);
 
     const savedIndex = await repository.load();
