@@ -6,18 +6,77 @@ import type { DocumentIndex, IndexedChunk } from "./domain/document-index.js";
 import { readTextFile } from "./infrastructure/files/read-text-file.js";
 import { JsonIndexRepository } from "./infrastructure/files/json-index-repository.js";
 import { OllamaEmbeddingGenerator } from "./infrastructure/ollama/ollama-embedding-generator.js";
+import { searchDocuments } from "./application/search-documents.js";
+import { answerQuestion } from "./application/answer-question.js";
+import { OllamaAnswerGenerator } from "./infrastructure/ollama/ollama-answer-generator.js";
 
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
-  const filePath = args[0];
+  const [command, filePath, question] = args;
 
-  if (args.length !== 1 || !filePath) {
-    console.error("Uso: npm start -- <ruta-al-archivo.txt>");
+  const isIndexCommand = command === "index" && args.length === 2;
+  const isSearchCommand = command === "search" && args.length === 3;
+  const isAskCommand = command === "ask" && args.length === 3;
+
+  if (!filePath || (!isIndexCommand && !isSearchCommand && !isAskCommand)) {
+    console.error("Uso:");
+    console.error("  npm start -- index <ruta-al-archivo.txt>");
+    console.error('  npm start -- search <ruta-al-indice.json> "<pregunta>"');
+    console.error('  npm start -- ask <ruta-al-indice.json> "<pregunta>"');
     process.exitCode = 1;
     return;
   }
-
   try {
+    if (command === "ask") {
+      const repository: IndexRepository =
+        new JsonIndexRepository(filePath);
+
+      console.log("Buscando fragmentos y generando respuesta...");
+
+      const result = await answerQuestion(question, {
+        repository,
+        createEmbeddingGenerator: (model) =>
+          new OllamaEmbeddingGenerator(model),
+        answerGenerator: new OllamaAnswerGenerator(),
+      });
+
+      console.log(`\n${result.answer}`);
+      console.log("\nFragmentos proporcionados al modelo:");
+
+      for (const source of result.sources) {
+        console.log(
+          `[${source.id}] ${source.source} — fragmento ${source.chunkIndex + 1}`,
+        );
+      }
+
+      return;
+    }
+
+    if (command === "search") {
+      const repository: IndexRepository =
+        new JsonIndexRepository(filePath);
+
+      const results = await searchDocuments(question, {
+        repository,
+        createEmbeddingGenerator: (model) =>
+          new OllamaEmbeddingGenerator(model),
+      });
+
+      console.log(`Fragmentos encontrados: ${results.length}`);
+
+      for (const [position, result] of results.entries()) {
+        console.log(
+          `\nResultado ${position + 1} | Similitud: ${result.score.toFixed(4)}`,
+        );
+        console.log(
+          `Origen: ${result.source} | Fragmento: ${result.chunkIndex + 1}`,
+        );
+        console.log(result.text);
+      }
+
+      return;
+    }
+
     const maxChars = 500;
     const embeddingModel = "qwen3-embedding:0.6b";
     const content = await readTextFile(filePath);
