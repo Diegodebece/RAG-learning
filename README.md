@@ -7,7 +7,7 @@ A command-line app in TypeScript that answers questions about your own text docu
 ## How it works
 
 1. **Index:** reads a `.txt` file, splits it into chunks, generates an embedding for each chunk and saves the index as JSON.
-2. **Search:** embeds the question and returns the most similar chunks with their similarity score.
+2. **Search:** loads a JSON index or a folder of indexes, embeds the question once and returns the most similar chunks across all documents with their similarity score.
 3. **Ask:** sends the best chunks to the LLM, which answers in Spanish **using only those chunks** and cites them as `[F1]`, `[F2]`. If the chunks don't contain the answer, it says so instead of making one up. The prompt also tells the model to treat document text as data and to ignore any instructions inside it.
 
 ## Tech
@@ -30,7 +30,19 @@ npm run build
 npm start -- index documents/lavalleja.txt
 npm start -- search data/lavalleja.json "¿Dónde nació Lavalleja?"
 npm start -- ask data/lavalleja.json "¿Dónde nació Lavalleja?"
+
+# Search or ask across all JSON indexes in data/
+npm start -- index documents/example.txt
+npm start -- search data "¿Dónde nació Lavalleja?"
+npm start -- ask data "¿Dónde nació Lavalleja?"
 ```
+
+Folder queries read only directly contained `.json` files (not subfolders).
+All indexes must use the same embedding model and vector dimensions; incompatible
+or invalid indexes produce an error before any model is called. Empty folders
+also produce an error. The default limit is three results across the entire
+collection, with no minimum similarity threshold. Each result preserves its
+document of origin for citations. Indexing still processes one `.txt` file at a time.
 
 Run the tests (Ollama not required):
 
@@ -55,6 +67,7 @@ documents/         sample texts
 - [ ] Validate citations returned by the model
 - [ ] Evaluation set with expected answers and an accuracy score
 - [ ] Sentence-aware chunking with overlap
-- [ ] Index multiple documents
+- [x] Search and answer across multiple persisted document indexes
+- [ ] Batch indexing of document folders
 - [ ] CI with GitHub Actions
 - [ ] HTTP API, web UI and Docker setup
