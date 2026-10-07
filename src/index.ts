@@ -3,6 +3,7 @@ import type { IndexRepository } from "./application/ports/index-repository.js";
 import { indexDocument } from "./application/index-document.js";
 import { readTextFile } from "./infrastructure/files/read-text-file.js";
 import { JsonIndexRepository } from "./infrastructure/files/json-index-repository.js";
+import { JsonIndexReader } from "./infrastructure/files/json-index-reader.js";
 import { OllamaEmbeddingGenerator } from "./infrastructure/ollama/ollama-embedding-generator.js";
 import { searchDocuments } from "./application/search-documents.js";
 import { answerQuestion } from "./application/answer-question.js";
@@ -19,20 +20,19 @@ async function main(): Promise<void> {
   if (!filePath || (!isIndexCommand && !isSearchCommand && !isAskCommand)) {
     console.error("Uso:");
     console.error("  npm start -- index <ruta-al-archivo.txt>");
-    console.error('  npm start -- search <ruta-al-indice.json> "<pregunta>"');
-    console.error('  npm start -- ask <ruta-al-indice.json> "<pregunta>"');
+    console.error('  npm start -- search <indice.json-o-carpeta> "<pregunta>"');
+    console.error('  npm start -- ask <indice.json-o-carpeta> "<pregunta>"');
     process.exitCode = 1;
     return;
   }
   try {
     if (command === "ask") {
-      const repository: IndexRepository =
-        new JsonIndexRepository(filePath);
+      const indexReader = new JsonIndexReader(filePath);
 
       console.log("Buscando fragmentos y generando respuesta...");
 
       const result = await answerQuestion(question, {
-        repository,
+        indexReader,
         createEmbeddingGenerator: (model) =>
           new OllamaEmbeddingGenerator(model),
         answerGenerator: new OllamaAnswerGenerator(),
@@ -51,11 +51,10 @@ async function main(): Promise<void> {
     }
 
     if (command === "search") {
-      const repository: IndexRepository =
-        new JsonIndexRepository(filePath);
+      const indexReader = new JsonIndexReader(filePath);
 
       const results = await searchDocuments(question, {
-        repository,
+        indexReader,
         createEmbeddingGenerator: (model) =>
           new OllamaEmbeddingGenerator(model),
       });

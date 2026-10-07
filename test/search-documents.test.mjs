@@ -24,14 +24,10 @@ function makeDependencies() {
   };
 
   const dependencies = {
-    repository: {
-      async load() {
+    indexReader: {
+      async loadAll() {
         calls.loads++;
-        return documentIndex;
-      },
-
-      async save() {
-        assert.fail("La búsqueda no debe guardar ni modificar el índice.");
+        return [documentIndex];
       },
     },
 
@@ -127,4 +123,55 @@ test("rejects a question embedding with incompatible dimensions", async () => {
     searchDocuments("Pregunta", dependencies),
     /dimensión.*no coincide/,
   );
+});
+
+test("ranks all documents together, retaining sources and generating the question vector once", async () => {
+  const { dependencies, calls, documentIndex } = makeDependencies();
+  const otherIndex = structuredClone(documentIndex);
+  otherIndex.source = "documents/otro.txt";
+  otherIndex.chunks = [{ index: 0, text: "Otro documento relevante.", embedding: [0.96, 0.28] }];
+  const indexes = [documentIndex, otherIndex];
+  const original = structuredClone(indexes);
+  dependencies.indexReader.loadAll = async () => indexes;
+
+  const results = await searchDocuments("Pregunta", dependencies, 3);
+
+  assert.deepEqual(results.map(result => [result.source, result.chunkIndex]), [
+    [documentIndex.source, 1],
+    [otherIndex.source, 0],
+    [documentIndex.source, 2],
+  ]);
+  assert.equal(results[1].text, otherIndex.chunks[0].text);
+  assert.ok(results[0].score >= results[1].score && results[1].score >= results[2].score);
+  assert.deepEqual(calls.models, ["test-model"]);
+  assert.deepEqual(calls.questions, ["Pregunta"]);
+  assert.deepEqual(indexes, original);
+});
+
+test("rejects incompatible models or dimensions before creating a generator", async () => {
+  for (const mismatch of ["model", "dimensions"]) {
+    const { dependencies, calls, documentIndex } = makeDependencies();
+    const incompatible = structuredClone(documentIndex);
+    incompatible.source = "documents/incompatible.txt";
+    if (mismatch === "model") {
+      incompatible.embeddingModel = "another-model";
+    } else {
+      incompatible.dimensions = 3;
+      incompatible.chunks.forEach(chunk => chunk.embedding.push(0));
+    }
+    dependencies.indexReader.loadAll = async () => [documentIndex, incompatible];
+
+    await assert.rejects(searchDocuments("Pregunta", dependencies), /Índice incompatible: documents\/incompatible.txt/);
+    assert.deepEqual(calls.models, []);
+    assert.deepEqual(calls.questions, []);
+  }
+});
+
+test("reports an empty collection before calling the embedding model", async () => {
+  const { dependencies, calls } = makeDependencies();
+  dependencies.indexReader.loadAll = async () => [];
+
+  await assert.rejects(searchDocuments("Pregunta", dependencies), /No se encontraron índices JSON/);
+  assert.deepEqual(calls.models, []);
+  assert.deepEqual(calls.questions, []);
 });

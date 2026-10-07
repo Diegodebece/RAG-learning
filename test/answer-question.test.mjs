@@ -23,13 +23,9 @@ function makeDependencies() {
   };
 
   const dependencies = {
-    repository: {
-      async load() {
-        return documentIndex;
-      },
-
-      async save() {
-        assert.fail("Responder no debe modificar el índice.");
+    indexReader: {
+      async loadAll() {
+        return [documentIndex];
       },
     },
 
@@ -108,7 +104,7 @@ test("rejects an empty question without generating an answer", async () => {
 test("does not generate an answer when loading the index fails", async () => {
   const { dependencies, calls } = makeDependencies();
 
-  dependencies.repository.load = async () => {
+  dependencies.indexReader.loadAll = async () => {
     throw new Error("Índice no disponible");
   };
 
@@ -131,4 +127,39 @@ test("propagates answer generation errors", async () => {
     answerQuestion("Pregunta", dependencies),
     /El modelo no respondió/,
   );
+});
+
+test("passes context from multiple documents with unique citation IDs and original fragment numbers", async () => {
+  const { dependencies, calls } = makeDependencies();
+  const [firstIndex] = await dependencies.indexReader.loadAll();
+  const secondIndex = structuredClone(firstIndex);
+  secondIndex.source = "documents/segundo.txt";
+  secondIndex.chunks = [{ index: 0, text: "Otro documento.", embedding: [0.96, 0.28] }];
+  dependencies.indexReader.loadAll = async () => [firstIndex, secondIndex];
+
+  const result = await answerQuestion("Pregunta", dependencies);
+
+  assert.deepEqual(result.sources.map(source => [source.id, source.source, source.chunkIndex]), [
+    ["F1", firstIndex.source, 1],
+    ["F2", secondIndex.source, 0],
+    ["F3", firstIndex.source, 2],
+  ]);
+  assert.deepEqual(
+    calls.answerRequests[0].fragments,
+    result.sources.map(({ id, ...source }) => source),
+  );
+  assert.deepEqual(calls.embeddedTexts, ["Pregunta"]);
+});
+
+test("does not generate an answer for empty or incompatible collections", async () => {
+  for (const empty of [true, false]) {
+    const { dependencies, calls } = makeDependencies();
+    const [firstIndex] = await dependencies.indexReader.loadAll();
+    const secondIndex = { ...firstIndex, embeddingModel: "another-model" };
+    dependencies.indexReader.loadAll = async () => empty ? [] : [firstIndex, secondIndex];
+
+    await assert.rejects(answerQuestion("Pregunta", dependencies));
+    assert.deepEqual(calls.models, []);
+    assert.deepEqual(calls.answerRequests, []);
+  }
 });

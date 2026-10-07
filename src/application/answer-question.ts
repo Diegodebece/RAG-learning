@@ -1,6 +1,6 @@
 import type { AnswerGenerator } from "./ports/answer-generator.js";
 import type { EmbeddingGenerator } from "./ports/embedding-generator.js";
-import type { IndexRepository } from "./ports/index-repository.js";
+import type { IndexReader } from "./ports/index-reader.js";
 import { searchDocuments } from "./search-documents.js";
 import type { SearchResult } from "./search-documents.js";
 
@@ -14,7 +14,7 @@ export interface AnswerResult {
 }
 
 interface AnswerDependencies {
-  repository: IndexRepository;
+  indexReader: IndexReader;
   createEmbeddingGenerator: (model: string) => EmbeddingGenerator;
   answerGenerator: AnswerGenerator;
 }
@@ -27,7 +27,7 @@ export async function answerQuestion(
   const results = await searchDocuments(
     question,
     {
-      repository: dependencies.repository,
+      indexReader: dependencies.indexReader,
       createEmbeddingGenerator: dependencies.createEmbeddingGenerator,
     },
     limit,
