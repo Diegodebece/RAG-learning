@@ -1,7 +1,9 @@
 import { join, parse } from "node:path";
 import type { IndexRepository } from "./application/ports/index-repository.js";
 import { indexDocument } from "./application/index-document.js";
-import { readTextFile } from "./infrastructure/files/read-text-file.js";
+import { readDocument } from "./infrastructure/files/read-document.js";
+import { confirmPartialExtraction } from "./infrastructure/cli/confirm-partial-extraction.js";
+import { MIN_PDF_PAGE_CHARACTERS } from "./infrastructure/files/read-pdf-file.js";
 import { JsonIndexRepository } from "./infrastructure/files/json-index-repository.js";
 import { JsonIndexReader } from "./infrastructure/files/json-index-reader.js";
 import { OllamaEmbeddingGenerator } from "./infrastructure/ollama/ollama-embedding-generator.js";
@@ -19,7 +21,7 @@ async function main(): Promise<void> {
 
   if (!filePath || (!isIndexCommand && !isSearchCommand && !isAskCommand)) {
     console.error("Uso:");
-    console.error("  npm start -- index <ruta-al-archivo.txt>");
+    console.error("  npm start -- index <archivo.txt-pdf-o-docx>");
     console.error('  npm start -- search <indice.json-o-carpeta> "<pregunta>"');
     console.error('  npm start -- ask <indice.json-o-carpeta> "<pregunta>"');
     process.exitCode = 1;
@@ -74,7 +76,32 @@ async function main(): Promise<void> {
       return;
     }
 
-    const content = await readTextFile(filePath);
+    const extraction = await readDocument(filePath);
+    const content = extraction.text;
+    if (extraction.format === "docx" && content === "") {
+      throw new Error("El DOCX no contiene texto extraíble. No se generó ningún índice.");
+    }
+    if (extraction.format === "pdf") {
+
+      if (content === "") {
+        throw new Error("El PDF no contiene texto extraíble. Podría necesitar OCR. No se generó ningún índice.");
+      }
+
+      // Regla orientativa: al menos la mitad de las páginas tiene poco texto.
+      if (extraction.pagesWithLittleText / extraction.totalPages >= 0.5) {
+        console.warn("Extracción posiblemente incompleta:");
+        console.warn(`${extraction.totalPages} páginas, ${content.length} caracteres extraídos.`);
+        console.warn(`${extraction.pagesWithLittleText} páginas tienen menos de ${MIN_PDF_PAGE_CHARACTERS} caracteres.`);
+        console.warn("El documento podría contener páginas escaneadas.");
+        const confirmed = await confirmPartialExtraction();
+        if (!confirmed) {
+          console.error("Indexación cancelada. No se generaron embeddings ni se modificó el índice.");
+          process.exitCode = 1;
+          return;
+        }
+        console.warn("Continuando con el texto recuperado.");
+      }
+    }
     const indexPath = join("data", `${parse(filePath).name}.json`);
     const repository: IndexRepository = new JsonIndexRepository(indexPath);
 
