@@ -9,6 +9,8 @@ export interface SearchResult {
   score: number;
 }
 
+export const DEFAULT_MIN_SCORE = 0.3;
+
 interface SearchDependencies {
   indexReader: IndexReader;
   createEmbeddingGenerator: (model: string) => EmbeddingGenerator;
@@ -18,6 +20,7 @@ export async function searchDocuments(
   question: string,
   dependencies: SearchDependencies,
   limit: number = 3,
+  minScore: number = DEFAULT_MIN_SCORE,
 ): Promise<SearchResult[]> {
   const trimmedQuestion = question.trim();
 
@@ -27,6 +30,10 @@ export async function searchDocuments(
 
   if (!Number.isSafeInteger(limit) || limit <= 0) {
     throw new Error("El límite de resultados debe ser un entero positivo.");
+  }
+
+  if (!Number.isFinite(minScore) || minScore < -1 || minScore > 1) {
+    throw new Error("El umbral de similitud debe ser un número entre -1 y 1.");
   }
 
   const indexes = await dependencies.indexReader.loadAll();
@@ -71,5 +78,5 @@ export async function searchDocuments(
 
   results.sort((a, b) => b.score - a.score);
 
-  return results.slice(0, limit);
+  return results.filter(result => result.score >= minScore).slice(0, limit);
 }

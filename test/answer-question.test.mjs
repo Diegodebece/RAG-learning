@@ -54,7 +54,7 @@ function makeDependencies() {
 test("generates an answer using the retrieved fragments and returns their sources", async () => {
   const { dependencies, calls } = makeDependencies();
 
-  const result = await answerQuestion("  Mi pregunta  ", dependencies);
+  const result = await answerQuestion("  Mi pregunta  ", dependencies, 3, -1);
 
   assert.equal(result.answer, "Respuesta de prueba. [F1]");
   assert.deepEqual(calls.models, ["test-embedding-model"]);
@@ -137,7 +137,7 @@ test("passes context from multiple documents with unique citation IDs and origin
   secondIndex.chunks = [{ index: 0, text: "Otro documento.", embedding: [0.96, 0.28] }];
   dependencies.indexReader.loadAll = async () => [firstIndex, secondIndex];
 
-  const result = await answerQuestion("Pregunta", dependencies);
+  const result = await answerQuestion("Pregunta", dependencies, 3, -1);
 
   assert.deepEqual(result.sources.map(source => [source.id, source.source, source.chunkIndex]), [
     ["F1", firstIndex.source, 1],
@@ -149,6 +149,24 @@ test("passes context from multiple documents with unique citation IDs and origin
     result.sources.map(({ id, ...source }) => source),
   );
   assert.deepEqual(calls.embeddedTexts, ["Pregunta"]);
+});
+
+test("skips answer generation when no fragment reaches the threshold", async () => {
+  const { dependencies, calls } = makeDependencies();
+
+  let embeddingCalls = 0;
+  dependencies.createEmbeddingGenerator = () => ({
+    async generate() {
+      embeddingCalls++;
+      return [0, -1];
+    },
+  });
+  const result = await answerQuestion("Pregunta", dependencies, 3, 0.9);
+
+  assert.match(result.answer, /No encontré fragmentos/);
+  assert.deepEqual(result.sources, []);
+  assert.deepEqual(calls.answerRequests, []);
+  assert.equal(embeddingCalls, 1);
 });
 
 test("does not generate an answer for empty or incompatible collections", async () => {

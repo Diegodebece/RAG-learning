@@ -7,8 +7,8 @@ A command-line app in TypeScript that answers questions about your own text docu
 ## How it works
 
 1. **Index:** reads a `.txt`, text-based `.pdf`, or `.docx` file, splits it into chunks, generates an embedding for each chunk and saves the index as JSON.
-2. **Search:** loads a JSON index or a folder of indexes, embeds the question once and returns the most similar chunks across all documents with their similarity score.
-3. **Ask:** sends the best chunks to the LLM, which answers in Spanish **using only those chunks** and cites them as `[F1]`, `[F2]`. If the chunks don't contain the answer, it says so instead of making one up. The prompt also tells the model to treat document text as data and to ignore any instructions inside it.
+2. **Search:** loads a JSON index or a folder of indexes, embeds the question once and returns the most similar chunks across all documents that meet the minimum similarity score.
+3. **Ask:** sends those chunks to the LLM, which answers in Spanish **using only those chunks** and cites them as `[F1]`, `[F2]`. If no chunk meets the threshold, it reports that without calling the answer model. The prompt also tells the model to treat document text as data and to ignore any instructions inside it.
 
 ## Tech
 
@@ -30,6 +30,7 @@ npm run build
 npm start -- index documents/example.txt
 npm start -- search data/example.json "¿Qué usa RAG1 para generar embeddings?"
 npm start -- ask data/example.json "¿Qué usa RAG1 para generar embeddings?"
+npm start -- search data/example.json "¿Qué usa RAG1 para generar embeddings?" --min-score 0.45
 
 # Search or ask across all JSON indexes in data/
 npm start -- search data "¿Qué usa RAG1 para generar embeddings?"
@@ -40,7 +41,9 @@ Folder queries read only directly contained `.json` files (not subfolders).
 All indexes must use the same embedding model and vector dimensions; incompatible
 or invalid indexes produce an error before any model is called. Empty folders
 also produce an error. The default limit is three results across the entire
-collection, with no minimum similarity threshold. Each result preserves its
+collection. Search and ask use a minimum cosine similarity of 0.30 by default;
+pass `--min-score <value>` (from -1 to 1) to change it for one query. This score
+is not a probability of correctness. Each result preserves its
 document of origin for citations. Indexing processes one `.txt`, `.pdf`, or `.docx` file at a time.
 
 PDF extraction uses selectable text only, without OCR or table reconstruction.
@@ -95,7 +98,7 @@ documents/         sample texts
 
 - [x] Search and answer across multiple persisted document indexes
 - [x] Read and index text-based PDF and DOCX documents
-- [ ] Minimum similarity threshold: skip the LLM when no chunk is relevant
+- [x] Minimum similarity threshold: skip the answer model when no chunk qualifies
 - [ ] Validate citations returned by the model
 - [ ] Evaluation set with expected answers and an accuracy score
 - [ ] Sentence-aware chunking with overlap
