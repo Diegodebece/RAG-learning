@@ -7,41 +7,48 @@ import { MIN_PDF_PAGE_CHARACTERS } from "./infrastructure/files/read-pdf-file.js
 import { JsonIndexRepository } from "./infrastructure/files/json-index-repository.js";
 import { JsonIndexReader } from "./infrastructure/files/json-index-reader.js";
 import { OllamaEmbeddingGenerator } from "./infrastructure/ollama/ollama-embedding-generator.js";
-import { searchDocuments } from "./application/search-documents.js";
+import { DEFAULT_MIN_SCORE, searchDocuments } from "./application/search-documents.js";
 import { answerQuestion } from "./application/answer-question.js";
 import { OllamaAnswerGenerator } from "./infrastructure/ollama/ollama-answer-generator.js";
 
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
-  const [command, filePath, question] = args;
+  const [command, filePath, question, option, optionValue] = args;
 
   const isIndexCommand = command === "index" && args.length === 2;
-  const isSearchCommand = command === "search" && args.length === 3;
-  const isAskCommand = command === "ask" && args.length === 3;
+  const hasValidSearchArgs = args.length === 3 ||
+    (args.length === 5 && option === "--min-score" && optionValue?.trim() !== "");
+  const isSearchCommand = command === "search" && hasValidSearchArgs;
+  const isAskCommand = command === "ask" && hasValidSearchArgs;
 
   if (!filePath || (!isIndexCommand && !isSearchCommand && !isAskCommand)) {
     console.error("Uso:");
     console.error("  npm start -- index <archivo.txt-pdf-o-docx>");
-    console.error('  npm start -- search <indice.json-o-carpeta> "<pregunta>"');
-    console.error('  npm start -- ask <indice.json-o-carpeta> "<pregunta>"');
+    console.error('  npm start -- search <indice.json-o-carpeta> "<pregunta>" [--min-score <valor>]');
+    console.error('  npm start -- ask <indice.json-o-carpeta> "<pregunta>" [--min-score <valor>]');
     process.exitCode = 1;
     return;
   }
   try {
+    const minScore = optionValue === undefined ? DEFAULT_MIN_SCORE : Number(optionValue);
+
     if (command === "ask") {
       const indexReader = new JsonIndexReader(filePath);
 
-      console.log("Buscando fragmentos y generando respuesta...");
+      console.log("Buscando fragmentos relevantes...");
 
       const result = await answerQuestion(question, {
         indexReader,
         createEmbeddingGenerator: (model) =>
           new OllamaEmbeddingGenerator(model),
         answerGenerator: new OllamaAnswerGenerator(),
-      });
+      }, 3, minScore);
 
       console.log(`\n${result.answer}`);
-      console.log("\nFragmentos proporcionados al modelo:");
+
+      if (result.sources.length > 0) {
+        console.log("\nFragmentos proporcionados al modelo:");
+      }
 
       for (const source of result.sources) {
         console.log(
@@ -59,7 +66,7 @@ async function main(): Promise<void> {
         indexReader,
         createEmbeddingGenerator: (model) =>
           new OllamaEmbeddingGenerator(model),
-      });
+      }, 3, minScore);
 
       console.log(`Fragmentos encontrados: ${results.length}`);
 

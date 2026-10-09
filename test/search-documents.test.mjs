@@ -50,7 +50,7 @@ test("returns the top three fragments using the stored model", async () => {
   const { dependencies, calls, documentIndex } = makeDependencies();
   const original = structuredClone(documentIndex);
 
-  const results = await searchDocuments("  Mi pregunta  ", dependencies);
+  const results = await searchDocuments("  Mi pregunta  ", dependencies, 3, -1);
 
   assert.deepEqual(
     results.map(result => result.chunkIndex),
@@ -78,11 +78,33 @@ test("respects the limit without inventing additional results", async () => {
   assert.equal(oneResult.length, 1);
   assert.equal(oneResult[0].chunkIndex, 1);
 
-  const allResults = await searchDocuments("Pregunta", dependencies, 10);
+  const allResults = await searchDocuments("Pregunta", dependencies, 10, -1);
   assert.deepEqual(
     allResults.map(result => result.chunkIndex),
     [1, 2, 0, 3],
   );
+});
+
+test("filters fragments below the default similarity threshold", async () => {
+  const { dependencies } = makeDependencies();
+
+  const results = await searchDocuments("Pregunta", dependencies);
+
+  assert.deepEqual(results.map(result => result.chunkIndex), [1, 2]);
+  assert.ok(results.every(result => result.score >= 0.3));
+});
+
+test("allows a custom threshold and returns no fragments when none qualify", async () => {
+  const { dependencies } = makeDependencies();
+
+  const results = await searchDocuments("Pregunta", dependencies, 3, 0.9);
+  assert.deepEqual(results.map(result => result.chunkIndex), [1]);
+
+  const impossibleQuestion = {
+    ...dependencies,
+    createEmbeddingGenerator: () => ({ async generate() { return [0, -1]; } }),
+  };
+  assert.deepEqual(await searchDocuments("Pregunta", impossibleQuestion, 3, 0.9), []);
 });
 
 test("rejects an empty question before loading the index", async () => {
@@ -104,6 +126,19 @@ test("rejects invalid result limits", async () => {
     await assert.rejects(
       searchDocuments("Pregunta", dependencies, limit),
       /entero positivo/,
+    );
+  }
+
+  assert.equal(calls.loads, 0);
+});
+
+test("rejects similarity thresholds outside the cosine range before loading indexes", async () => {
+  const { dependencies, calls } = makeDependencies();
+
+  for (const threshold of [-1.1, 1.1, NaN, Infinity]) {
+    await assert.rejects(
+      searchDocuments("Pregunta", dependencies, 3, threshold),
+      /umbral de similitud/,
     );
   }
 
