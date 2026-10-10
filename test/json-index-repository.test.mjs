@@ -64,7 +64,7 @@ test("rejects non-finite vectors before writing and preserves the old index", as
   for (const invalidNumber of [NaN, Infinity, -Infinity]) {
     const invalid = makeIndex();
     invalid.chunks[0].embedding[0] = invalidNumber;
-    await assert.rejects(repository.save(invalid), /fragmento/);
+    await assert.rejects(repository.save(invalid), /Chunk/);
   }
 
   assert.deepEqual(await repository.load(), original);
@@ -74,9 +74,9 @@ test("reports missing files and malformed JSON", async (t) => {
   const directory = await makeDirectory(t);
   const filePath = join(directory, "index.json");
   const repository = new JsonIndexRepository(filePath);
-  await assert.rejects(repository.load(), /No se pudo leer el índice/);
+  await assert.rejects(repository.load(), /Could not read index/);
   await writeFile(filePath, "{", "utf8");
-  await assert.rejects(repository.load(), /no contiene JSON válido/);
+  await assert.rejects(repository.load(), /does not contain valid JSON/);
 });
 
 test("validates metadata, fragment order, text and vectors when loading", async (t) => {

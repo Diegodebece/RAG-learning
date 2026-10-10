@@ -22,10 +22,10 @@ async function main(): Promise<void> {
   const isAskCommand = command === "ask" && hasValidSearchArgs;
 
   if (!filePath || (!isIndexCommand && !isSearchCommand && !isAskCommand)) {
-    console.error("Uso:");
-    console.error("  npm start -- index <archivo.txt-pdf-o-docx>");
-    console.error('  npm start -- search <indice.json-o-carpeta> "<pregunta>" [--min-score <valor>]');
-    console.error('  npm start -- ask <indice.json-o-carpeta> "<pregunta>" [--min-score <valor>]');
+    console.error("Usage:");
+    console.error("  npm start -- index <file.txt-pdf-or-docx>");
+    console.error('  npm start -- search <index.json-or-directory> "<question>" [--min-score <value>]');
+    console.error('  npm start -- ask <index.json-or-directory> "<question>" [--min-score <value>]');
     process.exitCode = 1;
     return;
   }
@@ -35,7 +35,7 @@ async function main(): Promise<void> {
     if (command === "ask") {
       const indexReader = new JsonIndexReader(filePath);
 
-      console.log("Buscando fragmentos relevantes...");
+      console.log("Searching for relevant chunks...");
 
       const result = await answerQuestion(question, {
         indexReader,
@@ -47,12 +47,15 @@ async function main(): Promise<void> {
       console.log(`\n${result.answer}`);
 
       if (result.sources.length > 0) {
-        console.log("\nFragmentos proporcionados al modelo:");
+        console.log("\nChunks provided to the model:");
       }
 
       for (const source of result.sources) {
+        const origin = source.retrieval === "match"
+          ? `search match (similarity: ${source.score?.toFixed(4)})`
+          : "neighboring chunk";
         console.log(
-          `[${source.id}] ${source.source} — fragmento ${source.chunkIndex + 1}`,
+          `[${source.id}] ${source.source} — chunk ${source.chunkIndex + 1} — ${origin}`,
         );
       }
 
@@ -68,14 +71,14 @@ async function main(): Promise<void> {
           new OllamaEmbeddingGenerator(model),
       }, 3, minScore);
 
-      console.log(`Fragmentos encontrados: ${results.length}`);
+      console.log(`Chunks found: ${results.length}`);
 
       for (const [position, result] of results.entries()) {
         console.log(
-          `\nResultado ${position + 1} | Similitud: ${result.score.toFixed(4)}`,
+          `\nResult ${position + 1} | Similarity: ${result.score.toFixed(4)}`,
         );
         console.log(
-          `Origen: ${result.source} | Fragmento: ${result.chunkIndex + 1}`,
+          `Source: ${result.source} | Chunk: ${result.chunkIndex + 1}`,
         );
         console.log(result.text);
       }
@@ -86,33 +89,33 @@ async function main(): Promise<void> {
     const extraction = await readDocument(filePath);
     const content = extraction.text;
     if (extraction.format === "docx" && content === "") {
-      throw new Error("El DOCX no contiene texto extraíble. No se generó ningún índice.");
+      throw new Error("The DOCX contains no extractable text. No index was created.");
     }
     if (extraction.format === "pdf") {
 
       if (content === "") {
-        throw new Error("El PDF no contiene texto extraíble. Podría necesitar OCR. No se generó ningún índice.");
+        throw new Error("The PDF contains no extractable text. It may require OCR. No index was created.");
       }
 
       // Regla orientativa: al menos la mitad de las páginas tiene poco texto.
       if (extraction.pagesWithLittleText / extraction.totalPages >= 0.5) {
-        console.warn("Extracción posiblemente incompleta:");
-        console.warn(`${extraction.totalPages} páginas, ${content.length} caracteres extraídos.`);
-        console.warn(`${extraction.pagesWithLittleText} páginas tienen menos de ${MIN_PDF_PAGE_CHARACTERS} caracteres.`);
-        console.warn("El documento podría contener páginas escaneadas.");
+        console.warn("Text extraction may be incomplete:");
+        console.warn(`${extraction.totalPages} pages, ${content.length} characters extracted.`);
+        console.warn(`${extraction.pagesWithLittleText} pages contain fewer than ${MIN_PDF_PAGE_CHARACTERS} characters.`);
+        console.warn("The document may contain scanned pages.");
         const confirmed = await confirmPartialExtraction();
         if (!confirmed) {
-          console.error("Indexación cancelada. No se generaron embeddings ni se modificó el índice.");
+          console.error("Indexing canceled. No embeddings were generated and the index was not changed.");
           process.exitCode = 1;
           return;
         }
-        console.warn("Continuando con el texto recuperado.");
+        console.warn("Continuing with the extracted text.");
       }
     }
     const indexPath = join("data", `${parse(filePath).name}.json`);
     const repository: IndexRepository = new JsonIndexRepository(indexPath);
 
-    console.log("Indexando documento...");
+    console.log("Indexing document...");
 
     const documentIndex = await indexDocument(
       {
@@ -129,35 +132,35 @@ async function main(): Promise<void> {
     );
 
     if (documentIndex === null) {
-      console.log("El archivo está vacío o solo contiene espacios.");
+      console.log("The file is empty or contains only whitespace.");
       return;
     }
 
-    console.log(`Fragmentos generados: ${documentIndex.chunks.length}`);
+    console.log(`Chunks generated: ${documentIndex.chunks.length}`);
 
     for (const chunk of documentIndex.chunks) {
-      console.log(`\nFragmento ${chunk.index + 1} (${chunk.text.length} caracteres):`);
+      console.log(`\nChunk ${chunk.index + 1} (${chunk.text.length} characters):`);
       console.log(chunk.text);
-      console.log(`Embedding válido: ${chunk.embedding.length} dimensiones.`);
+      console.log(`Valid embedding: ${chunk.embedding.length} dimensions.`);
     }
 
-    console.log(`\nÍndice en memoria: ${documentIndex.chunks.length} fragmentos con sus embeddings.`);
-    console.log(`Origen: ${documentIndex.source}`);
-    console.log(`Modelo: ${documentIndex.embeddingModel}`);
-    console.log(`Dimensiones: ${documentIndex.dimensions}`);
+    console.log(`\nIndex in memory: ${documentIndex.chunks.length} chunks with embeddings.`);
+    console.log(`Source: ${documentIndex.source}`);
+    console.log(`Model: ${documentIndex.embeddingModel}`);
+    console.log(`Dimensions: ${documentIndex.dimensions}`);
 
-    console.log(`Índice guardado en: ${indexPath}`);
+    console.log(`Index saved to: ${indexPath}`);
 
     const savedIndex = await repository.load();
     console.log(
-      `Índice recuperado del JSON: ${savedIndex.chunks.length} fragmentos de ${savedIndex.dimensions} dimensiones.`,
+      `Index loaded from JSON: ${savedIndex.chunks.length} chunks with ${savedIndex.dimensions} dimensions.`,
     );
   } catch (error: unknown) {
     if (error instanceof Error && "code" in error && error.code === "ENOENT") {
-      console.error(`No se encontró el archivo: ${filePath}`);
+      console.error(`File not found: ${filePath}`);
     } else {
-      const detail = error instanceof Error ? error.message : "Error desconocido";
-      console.error(`No se pudo procesar el archivo: ${detail}`);
+      const detail = error instanceof Error ? error.message : "Unknown error";
+      console.error(`Could not process the file: ${detail}`);
     }
 
     process.exitCode = 1;

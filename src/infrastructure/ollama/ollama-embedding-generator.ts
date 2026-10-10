@@ -26,17 +26,17 @@ export class OllamaEmbeddingGenerator implements EmbeddingGenerator {
       });
     } catch (error: unknown) {
       if (error instanceof Error && error.name === "TimeoutError") {
-        throw new Error("Ollama no respondió en el límite de 120 segundos.");
+        throw new Error("Ollama did not respond within 120 seconds.");
       }
 
       throw new Error(
-        `No se pudo conectar con Ollama en ${this.baseUrl}. Verificá que esté ejecutándose.`,
+        `Could not connect to Ollama at ${this.baseUrl}. Check that it is running.`,
       );
     }
 
     if (!response.ok) {
       const detail = await response.text();
-      throw new Error(`Ollama devolvió HTTP ${response.status}: ${detail}`);
+      throw new Error(`Ollama returned HTTP ${response.status}: ${detail}`);
     }
 
     const data: unknown = await response.json();
@@ -50,7 +50,7 @@ export class OllamaEmbeddingGenerator implements EmbeddingGenerator {
       !isEmbedding(data.embeddings[0])
     ) {
       throw new Error(
-        "Ollama debe devolver exactamente un vector no vacío con números finitos por fragmento.",
+        "Ollama must return exactly one non-empty vector of finite numbers per chunk.",
       );
     }
 

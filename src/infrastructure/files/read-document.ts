@@ -18,6 +18,6 @@ export async function readDocument(filePath: string): Promise<DocumentExtraction
     case ".docx":
       return { format: "docx", text: await readDocxFile(filePath) };
     default:
-      throw new Error(`Formato no admitido: ${extension || "sin extensión"}. Usá un archivo .txt, .pdf o .docx.`);
+      throw new Error(`Unsupported format: ${extension || "no extension"}. Use a .txt, .pdf, or .docx file.`);
   }
 }

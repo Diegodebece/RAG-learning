@@ -34,8 +34,9 @@ test("sends the question, context and instructions to Ollama", async (t) => {
     const [systemMessage, userMessage] = body.messages;
 
     assert.equal(systemMessage.role, "system");
-    assert.match(systemMessage.content, /Usá exclusivamente/);
-    assert.match(systemMessage.content, /No encuentro información suficiente/);
+    assert.match(systemMessage.content, /Answer the user's question briefly in English/);
+    assert.match(systemMessage.content, /Use only information from the provided chunks/);
+    assert.match(systemMessage.content, /I cannot find enough information/);
 
     assert.equal(userMessage.role, "user");
     assert.deepEqual(JSON.parse(userMessage.content), {
@@ -100,7 +101,7 @@ test("returns insufficient information without calling Ollama when context is em
 
   assert.equal(
     answer,
-    "No encuentro información suficiente en los fragmentos disponibles para responder.",
+    "I cannot find enough information in the provided chunks to answer.",
   );
 });
 
@@ -111,7 +112,7 @@ test("rejects an empty question before calling Ollama", async (t) => {
 
   await assert.rejects(
     new OllamaAnswerGenerator().generate("   ", fragments),
-    /pregunta no puede estar vacía/,
+    /question cannot be empty/,
   );
 });
 
@@ -135,7 +136,7 @@ test("rejects responses without valid text", async (t) => {
 
       await assert.rejects(
         new OllamaAnswerGenerator().generate("Pregunta", fragments),
-        /contenido textual válido/,
+        /valid text content/,
       );
     });
   }
@@ -159,7 +160,7 @@ test("reports when Ollama is unavailable", async (t) => {
 
   await assert.rejects(
     new OllamaAnswerGenerator().generate("Pregunta", fragments),
-    /No se pudo conectar con Ollama/,
+    /Could not connect to Ollama/,
   );
 });
 
@@ -170,6 +171,6 @@ test("reports a request timeout", async (t) => {
 
   await assert.rejects(
     new OllamaAnswerGenerator().generate("Pregunta", fragments),
-    /120 segundos/,
+    /120 seconds/,
   );
 });

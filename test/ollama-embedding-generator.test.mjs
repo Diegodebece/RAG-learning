@@ -45,7 +45,7 @@ test("rejects malformed or ambiguous vectors", async (t) => {
   for (const data of invalidResponses) {
     await t.test(JSON.stringify(data), async (subtest) => {
       subtest.mock.method(globalThis, "fetch", async () => Response.json(data));
-      await assert.rejects(new OllamaEmbeddingGenerator().generate("texto"), /números finitos/);
+      await assert.rejects(new OllamaEmbeddingGenerator().generate("texto"), /finite numbers/);
     });
   }
 });
@@ -63,7 +63,7 @@ test("reports when Ollama is unavailable", async (t) => {
     throw new TypeError("fetch failed");
   });
 
-  await assert.rejects(new OllamaEmbeddingGenerator().generate("texto"), /No se pudo conectar con Ollama/);
+  await assert.rejects(new OllamaEmbeddingGenerator().generate("texto"), /Could not connect to Ollama/);
 });
 
 test("reports a request timeout", async (t) => {
@@ -71,5 +71,5 @@ test("reports a request timeout", async (t) => {
     throw new DOMException("Timed out", "TimeoutError");
   });
 
-  await assert.rejects(new OllamaEmbeddingGenerator().generate("texto"), /120 segundos/);
+  await assert.rejects(new OllamaEmbeddingGenerator().generate("texto"), /120 seconds/);
 });

@@ -1,6 +1,6 @@
 export function chunkText(text: string, maxChars: number = 500): string[] {
   if (!Number.isInteger(maxChars) || maxChars <= 0) {
-    throw new RangeError("El tamaño máximo debe ser un número entero positivo.");
+    throw new RangeError("The maximum chunk size must be a positive integer.");
   }
 
   const trimmedText = text.trim();
@@ -17,7 +17,7 @@ export function chunkText(text: string, maxChars: number = 500): string[] {
   for (const word of words) {
     if (word.length > maxChars) {
       throw new RangeError(
-        `Una palabra supera el límite de ${maxChars} caracteres. Aumentá el tamaño máximo.`,
+        `A word exceeds the ${maxChars}-character limit. Increase the maximum chunk size.`,
       );
     }
 

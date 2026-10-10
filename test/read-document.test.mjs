@@ -54,6 +54,6 @@ test("rejects a corrupt DOCX", async (t) => {
 
 test("rejects unsupported and missing extensions", async () => {
   for (const path of ["old.doc", "image.png", "no-extension"]) {
-    await assert.rejects(readDocument(path), /Formato no admitido/);
+    await assert.rejects(readDocument(path), /Unsupported format/);
   }
 });

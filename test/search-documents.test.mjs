@@ -112,7 +112,7 @@ test("rejects an empty question before loading the index", async () => {
 
   await assert.rejects(
     searchDocuments("   ", dependencies),
-    /pregunta no puede estar vacía/,
+    /question cannot be empty/,
   );
 
   assert.equal(calls.loads, 0);
@@ -125,7 +125,7 @@ test("rejects invalid result limits", async () => {
   for (const limit of [0, -1, 1.5, NaN, Infinity]) {
     await assert.rejects(
       searchDocuments("Pregunta", dependencies, limit),
-      /entero positivo/,
+    /positive integer/,
     );
   }
 
@@ -138,7 +138,7 @@ test("rejects similarity thresholds outside the cosine range before loading inde
   for (const threshold of [-1.1, 1.1, NaN, Infinity]) {
     await assert.rejects(
       searchDocuments("Pregunta", dependencies, 3, threshold),
-      /umbral de similitud/,
+      /similarity threshold/,
     );
   }
 
@@ -156,7 +156,7 @@ test("rejects a question embedding with incompatible dimensions", async () => {
 
   await assert.rejects(
     searchDocuments("Pregunta", dependencies),
-    /dimensión.*no coincide/,
+    /embedding dimensions do not match/,
   );
 });
 
@@ -196,7 +196,7 @@ test("rejects incompatible models or dimensions before creating a generator", as
     }
     dependencies.indexReader.loadAll = async () => [documentIndex, incompatible];
 
-    await assert.rejects(searchDocuments("Pregunta", dependencies), /Índice incompatible: documents\/incompatible.txt/);
+    await assert.rejects(searchDocuments("Pregunta", dependencies), /Incompatible index: documents\/incompatible.txt/);
     assert.deepEqual(calls.models, []);
     assert.deepEqual(calls.questions, []);
   }
@@ -206,7 +206,7 @@ test("reports an empty collection before calling the embedding model", async () 
   const { dependencies, calls } = makeDependencies();
   dependencies.indexReader.loadAll = async () => [];
 
-  await assert.rejects(searchDocuments("Pregunta", dependencies), /No se encontraron índices JSON/);
+  await assert.rejects(searchDocuments("Pregunta", dependencies), /No JSON indexes were found/);
   assert.deepEqual(calls.models, []);
   assert.deepEqual(calls.questions, []);
 });

@@ -21,8 +21,8 @@ test("calculates similarity for vectors with multiple components", () => {
 });
 
 test("rejects empty vectors or different dimensions", () => {
-  assert.throws(() => cosineSimilarity([], []), /misma dimensión/);
-  assert.throws(() => cosineSimilarity([1, 2], [1]), /misma dimensión/);
+  assert.throws(() => cosineSimilarity([], []), /same dimensions/);
+  assert.throws(() => cosineSimilarity([1, 2], [1]), /same dimensions/);
 });
 
 test("rejects vectors with zero magnitude", () => {
@@ -41,12 +41,12 @@ test("rejects non-finite numbers in either vector", () => {
   for (const value of [NaN, Infinity, -Infinity]) {
     assert.throws(
       () => cosineSimilarity([value, 1], [1, 2]),
-      /números finitos/,
+      /finite numbers/,
     );
 
     assert.throws(
       () => cosineSimilarity([1, 2], [value, 1]),
-      /números finitos/,
+      /finite numbers/,
     );
   }
 });

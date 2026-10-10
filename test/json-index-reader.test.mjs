@@ -72,11 +72,11 @@ test("identifies a broken JSON file instead of silently skipping it", async (t) 
   await writeFile(join(directory, "valid.json"), JSON.stringify(makeIndex("valid.txt")));
   await writeFile(join(directory, "broken.json"), "{");
 
-  await assert.rejects(new JsonIndexReader(directory).loadAll(), /broken\.json.*JSON válido/);
+  await assert.rejects(new JsonIndexReader(directory).loadAll(), /broken\.json.*valid JSON/);
 });
 
 test("validates the schema of each index and identifies the invalid file", async (t) => {
   const directory = await makeDirectory(t);
   await writeFile(join(directory, "invalid.json"), JSON.stringify({ version: 1 }));
-  await assert.rejects(new JsonIndexReader(directory).loadAll(), /invalid\.json.*origen/);
+  await assert.rejects(new JsonIndexReader(directory).loadAll(), /invalid\.json.*source/);
 });

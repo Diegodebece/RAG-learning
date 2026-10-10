@@ -1,4 +1,5 @@
 import { cosineSimilarity } from "../domain/cosine-similarity.js";
+import type { DocumentIndex } from "../domain/document-index.js";
 import type { EmbeddingGenerator } from "./ports/embedding-generator.js";
 import type { IndexReader } from "./ports/index-reader.js";
 
@@ -22,24 +23,34 @@ export async function searchDocuments(
   limit: number = 3,
   minScore: number = DEFAULT_MIN_SCORE,
 ): Promise<SearchResult[]> {
+  const { results } = await searchDocumentsWithIndexes(question, dependencies, limit, minScore);
+  return results;
+}
+
+export async function searchDocumentsWithIndexes(
+  question: string,
+  dependencies: SearchDependencies,
+  limit: number = 3,
+  minScore: number = DEFAULT_MIN_SCORE,
+): Promise<{ results: SearchResult[]; indexes: DocumentIndex[] }> {
   const trimmedQuestion = question.trim();
 
   if (trimmedQuestion === "") {
-    throw new Error("La pregunta no puede estar vacía.");
+    throw new Error("The question cannot be empty.");
   }
 
   if (!Number.isSafeInteger(limit) || limit <= 0) {
-    throw new Error("El límite de resultados debe ser un entero positivo.");
+    throw new Error("The result limit must be a positive integer.");
   }
 
   if (!Number.isFinite(minScore) || minScore < -1 || minScore > 1) {
-    throw new Error("El umbral de similitud debe ser un número entre -1 y 1.");
+    throw new Error("The similarity threshold must be a number between -1 and 1.");
   }
 
   const indexes = await dependencies.indexReader.loadAll();
 
   if (indexes.length === 0) {
-    throw new Error("No se encontraron índices JSON para buscar.");
+    throw new Error("No JSON indexes were found to search.");
   }
 
   const referenceIndex = indexes[0];
@@ -50,7 +61,7 @@ export async function searchDocuments(
       index.dimensions !== referenceIndex.dimensions
     ) {
       throw new Error(
-        `Índice incompatible: ${index.source} usa ${index.embeddingModel} con ${index.dimensions} dimensiones; se esperaba ${referenceIndex.embeddingModel} con ${referenceIndex.dimensions}. Reindexá los documentos con el mismo modelo.`,
+        `Incompatible index: ${index.source} uses ${index.embeddingModel} with ${index.dimensions} dimensions; expected ${referenceIndex.embeddingModel} with ${referenceIndex.dimensions}. Reindex the documents with the same model.`,
       );
     }
   }
@@ -63,7 +74,7 @@ export async function searchDocuments(
 
   if (questionEmbedding.length !== referenceIndex.dimensions) {
     throw new Error(
-      "La dimensión del embedding de la pregunta no coincide con la del índice.",
+      "The question embedding dimensions do not match the index.",
     );
   }
 
@@ -78,5 +89,8 @@ export async function searchDocuments(
 
   results.sort((a, b) => b.score - a.score);
 
-  return results.filter(result => result.score >= minScore).slice(0, limit);
+  return {
+    results: results.filter(result => result.score >= minScore).slice(0, limit),
+    indexes,
+  };
 }
