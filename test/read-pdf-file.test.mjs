@@ -93,7 +93,7 @@ test("CLI indexes DOCX text with its original source and no page confirmation", 
   await copyFile(new URL("./fixtures/simple.docx", import.meta.url), join(directory, "sample.DOCX"));
   const result = await runIndex(directory, ["sample.DOCX"], true);
   assert.equal(result.code, 0, result.stderr);
-  assert.doesNotMatch(result.stdout, /Querés continuar/);
+  assert.doesNotMatch(result.stdout, /Continue\?/);
   const index = JSON.parse(await readFile(join(directory, "data", "sample.json"), "utf8"));
   assert.equal(index.source, "sample.DOCX");
   assert.equal(index.chunks[0].text, "Lavalleja nació en Minas. Documento de prueba para RAG1.");
@@ -104,9 +104,9 @@ test("CLI rejects empty DOCX before embedding or writing an index", async (t) =>
   await copyFile(new URL("./fixtures/empty.docx", import.meta.url), join(directory, "empty.docx"));
   const result = await runIndex(directory, ["empty.docx"]);
   assert.equal(result.code, 1);
-  assert.match(result.stderr, /DOCX no contiene texto extraíble/);
+  assert.match(result.stderr, /DOCX contains no extractable text/);
   assert.doesNotMatch(result.stderr, /EMBEDDING_REQUEST/);
-  assert.doesNotMatch(result.stdout, /Querés continuar/);
+  assert.doesNotMatch(result.stdout, /Continue\?/);
   await assert.rejects(readFile(join(directory, "data", "empty.json")), { code: "ENOENT" });
 });
 
@@ -129,7 +129,7 @@ async function runIndex(directory, args, allowEmbedding = false, answer = "\n") 
     let responded = false;
     execution.child.stdout.on("data", (chunk) => {
       output += chunk;
-      if (!responded && output.includes("¿Querés continuar? [s/N]")) {
+      if (!responded && output.includes("Continue? [y/N]")) {
         responded = true;
         execution.child.stdin.end(answer ?? "");
       }
@@ -151,9 +151,9 @@ test("CLI blocks suspicious PDFs before Ollama and preserves an existing index",
   await writeFile(join(directory, "mixed.pdf"), makePdf("Texto recuperado.", ""));
   const result = await runIndex(directory, ["mixed.pdf"]);
   assert.equal(result.code, 1);
-  assert.match(result.stderr, /Extracción posiblemente incompleta/);
-  assert.match(result.stdout, /¿Querés continuar\? \[s\/N\]/);
-  assert.match(result.stderr, /Indexación cancelada/);
+  assert.match(result.stderr, /Text extraction may be incomplete/);
+  assert.match(result.stdout, /Continue\? \[y\/N\]/);
+  assert.match(result.stderr, /Indexing canceled/);
   assert.doesNotMatch(result.stderr, /EMBEDDING_REQUEST/);
   assert.equal(await readFile(indexPath, "utf8"), "existing index");
 });
@@ -161,9 +161,9 @@ test("CLI blocks suspicious PDFs before Ollama and preserves an existing index",
 test("CLI permits suspicious extraction after an affirmative console answer", async (t) => {
   const directory = await makeDirectory(t);
   await writeFile(join(directory, "mixed.PDF"), makePdf("Texto recuperado.", ""));
-  const result = await runIndex(directory, ["mixed.PDF"], true, " S \n");
+  const result = await runIndex(directory, ["mixed.PDF"], true, " Y \n");
   assert.equal(result.code, 0, result.stderr);
-  assert.match(result.stderr, /Continuando con el texto recuperado/);
+  assert.match(result.stderr, /Continuing with the extracted text/);
   const index = JSON.parse(await readFile(join(directory, "data", "mixed.json"), "utf8"));
   assert.equal(index.source, "mixed.PDF");
   assert.equal(index.chunks[0].text, "Texto recuperado.");
@@ -174,8 +174,8 @@ test("CLI rejects empty extraction without asking for confirmation", async (t) =
   await writeFile(join(directory, "empty.pdf"), makePdf(""));
   const result = await runIndex(directory, ["empty.pdf"]);
   assert.equal(result.code, 1);
-  assert.match(result.stderr, /no contiene texto extraíble/);
-  assert.doesNotMatch(result.stdout, /Querés continuar/);
+  assert.match(result.stderr, /contains no extractable text/);
+  assert.doesNotMatch(result.stdout, /Continue\?/);
   assert.doesNotMatch(result.stderr, /EMBEDDING_REQUEST/);
   await assert.rejects(readFile(join(directory, "data", "empty.json")), { code: "ENOENT" });
 });
@@ -185,15 +185,15 @@ test("CLI indexes PDF text normally below the suspicious-page threshold", async 
   await writeFile(join(directory, "normal.pdf"), makePdf("a".repeat(50), "b".repeat(50), ""));
   const result = await runIndex(directory, ["normal.pdf"], true);
   assert.equal(result.code, 0, result.stderr);
-  assert.doesNotMatch(result.stderr, /Extracción posiblemente incompleta/);
-  assert.doesNotMatch(result.stdout, /Querés continuar/);
+  assert.doesNotMatch(result.stderr, /Text extraction may be incomplete/);
+  assert.doesNotMatch(result.stdout, /Continue\?/);
 });
 
 test("CLI rejects an unknown option before extracting or embedding", async (t) => {
   const directory = await makeDirectory(t);
   const result = await runIndex(directory, ["missing.pdf", "--allow-partial-extraction"]);
   assert.equal(result.code, 1);
-  assert.match(result.stderr, /Uso:/);
+  assert.match(result.stderr, /Usage:/);
   assert.doesNotMatch(result.stderr, /EMBEDDING_REQUEST/);
 });
 
@@ -203,7 +203,7 @@ for (const answer of ["n\n", "tal vez\n", null]) {
     await writeFile(join(directory, "mixed.pdf"), makePdf("Texto recuperado.", ""));
     const result = await runIndex(directory, ["mixed.pdf"], false, answer);
     assert.equal(result.code, 1);
-    assert.match(result.stderr, /Indexación cancelada/);
+    assert.match(result.stderr, /Indexing canceled/);
     assert.doesNotMatch(result.stderr, /EMBEDDING_REQUEST/);
     await assert.rejects(readFile(join(directory, "data", "mixed.json")), { code: "ENOENT" });
   });

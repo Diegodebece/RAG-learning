@@ -1,0 +1,39 @@
+RAG1 timeline
+=============
+
+Initial document retrieval checks
+---------------------------------
+- The rice fertilization PDF produced correct answers for two checked questions: the recommended maximum delay between urea application at tillering and flooding (3 days), and the nitrogen dose for rice stubble with P.M.N. below 10 ppm (100 kg/ha).
+- The minimum similarity score behaved as expected in a manual check: 0.6 returned one result, while 0.7 returned none. These are retrieval checks, not evidence that the answers are always correct.
+
+Long-document check: The Adventures of Sherlock Holmes
+-------------------------------------------------------
+- Indexing the roughly 594,000-character text took about one minute. The resulting JSON index contains 1,161 chunks and is about 26 MB.
+- Question: "What did the King of Bohemia want to recover from Irene Adler?" Result: incorrect/incomplete. The answer failed to identify the photograph of the two together. Relevant evidence was in chunks 35 and 40, but neither reached the answer's context. A retrieved chunk mentioned a different photograph, and another was an irrelevant reference from elsewhere in the book.
+- Question: "What animal caused Julia Stoner's death in The Speckled Band?" Result: incorrect. The answer said "cobra"; Holmes calls it a "swamp adder." The exact identification is in chunk 730, immediately before retrieved chunk 731. The cited chunks did not support the animal name given in the answer.
+- Question: "What color dress was Violet Hunter asked to wear in The Copper Beeches?" Result: correct: electric blue. Retrieved chunk 1045 explicitly supports the answer, although the generated answer cited chunk 1073, which only says "a peculiar shade of blue."
+- Observed outcome: 1 correct answer out of these 3 Sherlock Holmes questions. This small manual sample is not a general accuracy estimate.
+
+Ideas recorded before the neighbor experiment
+---------------------------------------------
+- Test whether including neighboring chunks around retrieved matches restores facts split at chunk boundaries.
+- Check whether the answer cites the chunk that actually supports each claim.
+- Compare retrieval changes against these same questions before changing the answer-generation prompt.
+
+Neighboring-chunk experiment
+----------------------------
+- The ask command now includes the previous and next chunk from the same document for each of its three retrieved matches, removes duplicates, and labels matches and neighbors in the displayed sources. The existing JSON index was reused without reindexing.
+- Julia Stoner: the model now named the swamp adder after chunk 730 was included as a neighbor. The answer still invented unsupported details about asphyxiation and bite locations, and cited chunk 731 instead of the chunk with the exact name. Treat this as partial improvement, not a fully correct answer.
+- King of Bohemia: the answer mentioned a photograph but added false claims about an emerald ring and the outcome. The decisive early-story chunks 35 and 40 still were not retrieved. Result: incorrect.
+- Violet Hunter: the answer remained correct and cited chunk 1045, which explicitly says "electric blue."
+- Conclusion from this small repeat: neighboring chunks can recover text lost at a boundary, but they do not fix missed passages or unsupported claims and citations. Do not treat these three runs as a general accuracy estimate.
+
+Next questions
+--------------
+- How can retrieval find decisive passages that are far from the current top matches, as in the King of Bohemia case?
+- How can answers be kept to claims actually supported by the supplied chunks, with citations to those exact chunks?
+
+English-language interface
+--------------------------
+- Changed the Ollama answer instructions to request brief English answers and English fallback text. Translated CLI output, confirmation prompts, and displayed errors into English.
+- A live Violet Hunter query returned an English answer. The answer was correct, though its citations still did not point to the strongest supporting chunk (1045), so citation quality remains an open issue.

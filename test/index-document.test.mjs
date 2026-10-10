@@ -98,7 +98,7 @@ test("rejects invalid configuration before generating or saving", async () => {
 
 test("does not save a partial index when vector dimensions differ", async () => {
   const { dependencies, calls } = makeDependencies([[1, 2], [1, 2, 3]]);
-  await assert.rejects(indexDocument(input, dependencies), /dimensiones/);
+  await assert.rejects(indexDocument(input, dependencies), /dimensions/);
   assert.equal(calls.texts.length, 2);
   assert.deepEqual(calls.saved, []);
 });
@@ -106,7 +106,7 @@ test("does not save a partial index when vector dimensions differ", async () => 
 test("rejects empty or non-finite embeddings before saving", async () => {
   for (const vector of [[], [NaN, 1], [Infinity, 1], [-Infinity, 1]]) {
     const { dependencies, calls } = makeDependencies([vector]);
-    await assert.rejects(indexDocument(input, dependencies), /embedding vacío o con números no finitos/);
+    await assert.rejects(indexDocument(input, dependencies), /empty embedding or non-finite numbers/);
     assert.deepEqual(calls.saved, []);
   }
 });

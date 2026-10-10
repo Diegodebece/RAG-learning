@@ -1,7 +1,7 @@
 export function cosineSimilarity(a: number[], b: number[]): number {
   if (a.length === 0 || a.length !== b.length) {
     throw new Error(
-      "Los vectores deben tener la misma dimensión y no estar vacíos.",
+      "Vectors must have the same dimensions and must not be empty.",
     );
   }
 
@@ -14,7 +14,7 @@ export function cosineSimilarity(a: number[], b: number[]): number {
     const valueB = b[i];
 
     if (!Number.isFinite(valueA) || !Number.isFinite(valueB)) {
-      throw new Error("Los vectores deben contener números finitos.");
+      throw new Error("Vectors must contain finite numbers.");
     }
 
     dotProduct += valueA * valueB;

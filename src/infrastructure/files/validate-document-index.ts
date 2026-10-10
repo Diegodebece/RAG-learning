@@ -10,7 +10,7 @@ function isPositiveInteger(value: unknown): value is number {
 
 export function validateDocumentIndex(value: unknown): asserts value is DocumentIndex {
   if (!isRecord(value) || value.version !== 1) {
-    throw new Error("El índice debe tener la versión de formato 1.");
+    throw new Error("The index must use format version 1.");
   }
 
   if (
@@ -18,7 +18,7 @@ export function validateDocumentIndex(value: unknown): asserts value is Document
     typeof value.embeddingModel !== "string" || value.embeddingModel.trim() === "" ||
     !isPositiveInteger(value.dimensions)
   ) {
-    throw new Error("El índice debe indicar origen, modelo y una dimensión entera positiva.");
+    throw new Error("The index must specify a source, model, and positive integer dimension.");
   }
 
   const chunking = value.chunking;
@@ -30,11 +30,11 @@ export function validateDocumentIndex(value: unknown): asserts value is Document
     !Number.isSafeInteger(chunking.overlapChars) ||
     chunking.overlapChars < 0 || chunking.overlapChars >= chunking.maxChars
   ) {
-    throw new Error("La configuración de fragmentación del índice no es válida.");
+    throw new Error("The index chunking configuration is invalid.");
   }
 
   if (!Array.isArray(value.chunks) || value.chunks.length === 0) {
-    throw new Error("El índice debe contener al menos un fragmento.");
+    throw new Error("The index must contain at least one chunk.");
   }
 
   for (const [position, chunk] of value.chunks.entries()) {
@@ -45,7 +45,7 @@ export function validateDocumentIndex(value: unknown): asserts value is Document
       !Array.isArray(chunk.embedding) || chunk.embedding.length !== value.dimensions ||
       !chunk.embedding.every((item: unknown) => typeof item === "number" && Number.isFinite(item))
     ) {
-      throw new Error(`El fragmento ${position + 1} del índice tiene datos o dimensiones inválidos.`);
+      throw new Error(`Chunk ${position + 1} in the index has invalid data or dimensions.`);
     }
   }
 }

@@ -29,8 +29,8 @@ export class JsonIndexRepository implements IndexRepository {
     try {
       content = await readFile(this.filePath, "utf8");
     } catch (error: unknown) {
-      const detail = error instanceof Error ? error.message : "Error desconocido";
-      throw new Error(`No se pudo leer el índice ${this.filePath}: ${detail}`);
+      const detail = error instanceof Error ? error.message : "Unknown error";
+      throw new Error(`Could not read index ${this.filePath}: ${detail}`);
     }
 
     let data: unknown;
@@ -38,7 +38,7 @@ export class JsonIndexRepository implements IndexRepository {
     try {
       data = JSON.parse(content);
     } catch {
-      throw new Error(`El archivo ${this.filePath} no contiene JSON válido.`);
+      throw new Error(`The file ${this.filePath} does not contain valid JSON.`);
     }
 
     validateDocumentIndex(data);

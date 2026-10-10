@@ -20,7 +20,7 @@ export class JsonIndexReader implements IndexReader {
     } else if (info.isFile()) {
       filePaths = [this.inputPath];
     } else {
-      throw new Error(`La ruta ${this.inputPath} debe ser un archivo o una carpeta de índices.`);
+      throw new Error(`The path ${this.inputPath} must be a file or an index directory.`);
     }
 
     const indexes: DocumentIndex[] = [];
@@ -30,8 +30,8 @@ export class JsonIndexReader implements IndexReader {
         // Reutilizamos la lectura y validación del formato de un único índice.
         indexes.push(await new JsonIndexRepository(filePath).load());
       } catch (error: unknown) {
-        const detail = error instanceof Error ? error.message : "Error desconocido";
-        throw new Error(`No se pudo cargar el índice ${filePath}: ${detail}`);
+        const detail = error instanceof Error ? error.message : "Unknown error";
+        throw new Error(`Could not load index ${filePath}: ${detail}`);
       }
     }
 

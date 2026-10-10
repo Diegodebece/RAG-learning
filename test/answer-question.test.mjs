@@ -17,6 +17,7 @@ function makeDependencies() {
   };
 
   const calls = {
+    loads: 0,
     models: [],
     embeddedTexts: [],
     answerRequests: [],
@@ -25,6 +26,7 @@ function makeDependencies() {
   const dependencies = {
     indexReader: {
       async loadAll() {
+        calls.loads++;
         return [documentIndex];
       },
     },
@@ -78,15 +80,32 @@ test("generates an answer using the retrieved fragments and returns their source
   assert.deepEqual(sourcesWithoutIds, request.fragments);
 });
 
-test("passes the requested result limit to the search", async () => {
+test("limits search matches while adding their adjacent chunks without loading twice", async () => {
   const { dependencies, calls } = makeDependencies();
 
   const result = await answerQuestion("Pregunta", dependencies, 1);
 
-  assert.equal(result.sources.length, 1);
-  assert.equal(result.sources[0].id, "F1");
-  assert.equal(result.sources[0].chunkIndex, 1);
-  assert.equal(calls.answerRequests[0].fragments.length, 1);
+  assert.deepEqual(result.sources.map(source => [source.id, source.chunkIndex, source.retrieval]), [
+    ["F1", 1, "match"],
+    ["F2", 0, "neighbor"],
+    ["F3", 2, "neighbor"],
+  ]);
+  assert.equal(result.sources[0].score, 1);
+  assert.equal(result.sources[1].score, undefined);
+  assert.equal(calls.answerRequests[0].fragments.length, 3);
+  assert.equal(calls.loads, 1);
+});
+
+test("includes a neighboring chunk even when its score is below the search threshold", async () => {
+  const { dependencies, calls } = makeDependencies();
+
+  const result = await answerQuestion("Pregunta", dependencies, 1, 0.9);
+
+  assert.deepEqual(result.sources.map(source => source.chunkIndex), [1, 0, 2]);
+  assert.deepEqual(result.sources.map(source => source.retrieval), ["match", "neighbor", "neighbor"]);
+  assert.deepEqual(calls.answerRequests[0].fragments.map(fragment => fragment.text), [
+    "Segundo fragmento.", "Primer fragmento.", "Tercer fragmento.",
+  ]);
 });
 
 test("rejects an empty question without generating an answer", async () => {
@@ -94,7 +113,7 @@ test("rejects an empty question without generating an answer", async () => {
 
   await assert.rejects(
     answerQuestion("   ", dependencies),
-    /pregunta no puede estar vacía/,
+    /question cannot be empty/,
   );
 
   assert.deepEqual(calls.embeddedTexts, []);
@@ -143,6 +162,7 @@ test("passes context from multiple documents with unique citation IDs and origin
     ["F1", firstIndex.source, 1],
     ["F2", secondIndex.source, 0],
     ["F3", firstIndex.source, 2],
+    ["F4", firstIndex.source, 0],
   ]);
   assert.deepEqual(
     calls.answerRequests[0].fragments,
@@ -163,7 +183,7 @@ test("skips answer generation when no fragment reaches the threshold", async () 
   });
   const result = await answerQuestion("Pregunta", dependencies, 3, 0.9);
 
-  assert.match(result.answer, /No encontré fragmentos/);
+  assert.match(result.answer, /No chunks in the indexed documents/);
   assert.deepEqual(result.sources, []);
   assert.deepEqual(calls.answerRequests, []);
   assert.equal(embeddingCalls, 1);

@@ -8,7 +8,7 @@ A command-line app in TypeScript that answers questions about your own text docu
 
 1. **Index:** reads a `.txt`, text-based `.pdf`, or `.docx` file, splits it into chunks, generates an embedding for each chunk and saves the index as JSON.
 2. **Search:** loads a JSON index or a folder of indexes, embeds the question once and returns the most similar chunks across all documents that meet the minimum similarity score.
-3. **Ask:** sends those chunks to the LLM, which answers in Spanish **using only those chunks** and cites them as `[F1]`, `[F2]`. If no chunk meets the threshold, it reports that without calling the answer model. The prompt also tells the model to treat document text as data and to ignore any instructions inside it.
+3. **Ask:** adds the previous and next chunk for each search match, removes duplicates, and sends the context to the LLM. The model is instructed to answer briefly in English **using only those chunks** and cite them as `[F1]`, `[F2]`. If no search match meets the threshold, the app reports that without calling the answer model. The prompt also tells the model to treat document text as data and ignore any instructions inside it.
 
 ## Tech
 
@@ -28,13 +28,13 @@ npm install
 npm run build
 
 npm start -- index documents/example.txt
-npm start -- search data/example.json "¿Qué usa RAG1 para generar embeddings?"
-npm start -- ask data/example.json "¿Qué usa RAG1 para generar embeddings?"
-npm start -- search data/example.json "¿Qué usa RAG1 para generar embeddings?" --min-score 0.45
+npm start -- search data/example.json "What does RAG1 use to generate embeddings?"
+npm start -- ask data/example.json "What does RAG1 use to generate embeddings?"
+npm start -- search data/example.json "What does RAG1 use to generate embeddings?" --min-score 0.45
 
 # Search or ask across all JSON indexes in data/
-npm start -- search data "¿Qué usa RAG1 para generar embeddings?"
-npm start -- ask data "¿Qué usa RAG1 para generar embeddings?"
+npm start -- search data "What does RAG1 use to generate embeddings?"
+npm start -- ask data "What does RAG1 use to generate embeddings?"
 ```
 
 Folder queries read only directly contained `.json` files (not subfolders).
@@ -43,14 +43,16 @@ or invalid indexes produce an error before any model is called. Empty folders
 also produce an error. The default limit is three results across the entire
 collection. Search and ask use a minimum cosine similarity of 0.30 by default;
 pass `--min-score <value>` (from -1 to 1) to change it for one query. This score
-is not a probability of correctness. Each result preserves its
-document of origin for citations. Indexing processes one `.txt`, `.pdf`, or `.docx` file at a time.
+is not a probability of correctness. Ask adds adjacent chunks even when their
+own scores are below the threshold; the threshold applies only to search matches.
+Each chunk preserves its document of origin for citations. Indexing processes
+one `.txt`, `.pdf`, or `.docx` file at a time.
 
 PDF extraction uses selectable text only, without OCR or table reconstruction.
 If at least half of the pages contain fewer than 50 trimmed text characters,
-indexing asks `¿Querés continuar? [s/N]` before generating embeddings or writing an index. This is a
+indexing asks `Continue? [y/N]` before generating embeddings or writing an index. This is a
 heuristic: sparse pages may be legitimate, and passing the check does not
-guarantee complete extraction. Enter `s` and press Enter to continue with the
+guarantee complete extraction. Enter `y` and press Enter to continue with the
 recovered text. Enter, any other answer, or closing input cancels indexing.
 There is no need to rerun the command or add a flag:
 

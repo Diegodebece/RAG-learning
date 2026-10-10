@@ -22,7 +22,7 @@ export async function indexDocument(
   const { source, text, embeddingModel, maxChars = 500 } = input;
 
   if (source.trim() === "" || embeddingModel.trim() === "") {
-    throw new Error("El origen y el modelo de embeddings no pueden estar vacíos.");
+    throw new Error("The source and embedding model cannot be empty.");
   }
 
   const chunks = chunkText(text, maxChars);
@@ -39,12 +39,12 @@ export async function indexDocument(
     const embedding = await embeddingGenerator.generate(chunk);
 
     if (embedding.length === 0 || !embedding.every(Number.isFinite)) {
-      throw new Error(`El fragmento ${index + 1} recibió un embedding vacío o con números no finitos.`);
+      throw new Error(`Chunk ${index + 1} received an empty embedding or non-finite numbers.`);
     }
 
     if (expectedDimensions !== undefined && embedding.length !== expectedDimensions) {
       throw new Error(
-        `El fragmento ${index + 1} tiene un embedding de ${embedding.length} dimensiones; se esperaban ${expectedDimensions}.`,
+        `Chunk ${index + 1} has an embedding with ${embedding.length} dimensions; expected ${expectedDimensions}.`,
       );
     }
 
