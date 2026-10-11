@@ -1,4 +1,6 @@
 import type { EmbeddingGenerator } from "../../application/ports/embedding-generator.js";
+import type { UsageListener } from "../../application/ports/model-usage.js";
+import { readUsage } from "./read-usage.js";
 
 function isEmbedding(value: unknown): value is number[] {
   return (
@@ -14,7 +16,7 @@ export class OllamaEmbeddingGenerator implements EmbeddingGenerator {
     private readonly baseUrl: string = "http://localhost:11434",
   ) {}
 
-  async generate(text: string): Promise<number[]> {
+  async generate(text: string, onUsage?: UsageListener): Promise<number[]> {
     let response: Response;
 
     try {
@@ -54,6 +56,7 @@ export class OllamaEmbeddingGenerator implements EmbeddingGenerator {
       );
     }
 
+    onUsage?.(readUsage(data as Record<string, unknown>, this.model, false));
     return data.embeddings[0];
   }
 }

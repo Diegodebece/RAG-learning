@@ -28,7 +28,7 @@ test("sends the question, context and instructions to Ollama", async (t) => {
     const body = JSON.parse(options.body);
 
     assert.equal(body.model, "qwen3.5:4b");
-    assert.equal(body.stream, false);
+    assert.equal(body.stream, true);
     assert.equal(body.think, false);
 
     const [systemMessage, userMessage] = body.messages;
@@ -58,16 +58,25 @@ test("sends the question, context and instructions to Ollama", async (t) => {
     });
 
     return Response.json({
+      done: true,
       message: { content: "  Respuesta de prueba. [F1]  " },
+      prompt_eval_count: 120,
+      eval_count: 8,
     });
   });
 
+  const textEvents = [];
+  const usageEvents = [];
   const answer = await new OllamaAnswerGenerator().generate(
     "  Mi pregunta  ",
     fragments,
+    usage => usageEvents.push(usage),
+    text => textEvents.push(text),
   );
 
   assert.equal(answer, "Respuesta de prueba. [F1]");
+  assert.deepEqual(textEvents, ["  Respuesta de prueba. [F1]  "]);
+  assert.deepEqual(usageEvents, [{ model: "qwen3.5:4b", inputTokens: 120, outputTokens: 8 }]);
   assert.equal(requestCount, 1);
 });
 
@@ -77,6 +86,7 @@ test("supports a different model and server", async (t) => {
     assert.equal(JSON.parse(options.body).model, "another-model");
 
     return Response.json({
+      done: true,
       message: { content: "Respuesta. [F1]" },
     });
   });
@@ -89,6 +99,56 @@ test("supports a different model and server", async (t) => {
   assert.equal(
     await generator.generate("Pregunta", fragments),
     "Respuesta. [F1]",
+  );
+});
+
+test("streams answer text before reporting final token usage", async (t) => {
+  t.mock.method(globalThis, "fetch", async () => {
+    const encoder = new TextEncoder();
+    return new Response(new ReadableStream({
+      start(controller) {
+        controller.enqueue(encoder.encode('{"message":{"content":"Hello "},"done":false}\n{"mess'));
+        controller.enqueue(encoder.encode('age":{"content":"world"},"done":false}\n'));
+        controller.enqueue(encoder.encode('{"message":{"content":""},"done":true,"prompt_eval_count":12,"eval_count":2}\n'));
+        controller.close();
+      },
+    }));
+  });
+
+  const events = [];
+  const answer = await new OllamaAnswerGenerator().generate(
+    "Question", fragments,
+    usage => events.push(["usage", usage]),
+    text => events.push(["text", text]),
+  );
+
+  assert.equal(answer, "Hello world");
+  assert.deepEqual(events, [
+    ["text", "Hello "],
+    ["text", "world"],
+    ["usage", { model: "qwen3.5:4b", inputTokens: 12, outputTokens: 2 }],
+  ]);
+});
+
+test("rejects a truncated stream instead of returning a partial answer", async (t) => {
+  t.mock.method(globalThis, "fetch", async () => new Response(
+    '{"message":{"content":"Partial answer"},"done":false}\n',
+  ));
+
+  await assert.rejects(
+    new OllamaAnswerGenerator().generate("Question", fragments),
+    /before completion/,
+  );
+});
+
+test("reports errors sent within a successful HTTP stream", async (t) => {
+  t.mock.method(globalThis, "fetch", async () => new Response(
+    '{"error":"model stopped unexpectedly"}\n',
+  ));
+
+  await assert.rejects(
+    new OllamaAnswerGenerator().generate("Question", fragments),
+    /Ollama stream error: model stopped unexpectedly/,
   );
 });
 
@@ -131,12 +191,12 @@ test("rejects responses without valid text", async (t) => {
       subtest.mock.method(
         globalThis,
         "fetch",
-        async () => Response.json(data),
+        async () => Response.json(data === null ? data : { ...data, done: true }),
       );
 
       await assert.rejects(
         new OllamaAnswerGenerator().generate("Pregunta", fragments),
-        /valid text content/,
+        /valid text content|invalid response stream event/,
       );
     });
   }

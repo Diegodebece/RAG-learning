@@ -2,6 +2,7 @@ import { cosineSimilarity } from "../domain/cosine-similarity.js";
 import type { DocumentIndex } from "../domain/document-index.js";
 import type { EmbeddingGenerator } from "./ports/embedding-generator.js";
 import type { IndexReader } from "./ports/index-reader.js";
+import { UsageTracker, type ProgressListener } from "./progress.js";
 
 export interface SearchResult {
   source: string;
@@ -15,6 +16,7 @@ export const DEFAULT_MIN_SCORE = 0.3;
 interface SearchDependencies {
   indexReader: IndexReader;
   createEmbeddingGenerator: (model: string) => EmbeddingGenerator;
+  onProgress?: ProgressListener;
 }
 
 export async function searchDocuments(
@@ -32,6 +34,7 @@ export async function searchDocumentsWithIndexes(
   dependencies: SearchDependencies,
   limit: number = 3,
   minScore: number = DEFAULT_MIN_SCORE,
+  usageTracker: UsageTracker = new UsageTracker(dependencies.onProgress),
 ): Promise<{ results: SearchResult[]; indexes: DocumentIndex[] }> {
   const trimmedQuestion = question.trim();
 
@@ -70,7 +73,9 @@ export async function searchDocumentsWithIndexes(
     referenceIndex.embeddingModel,
   );
 
-  const questionEmbedding = await embeddingGenerator.generate(trimmedQuestion);
+  const questionEmbedding = await embeddingGenerator.generate(trimmedQuestion, usage =>
+    usageTracker.record("query-embedding", usage),
+  );
 
   if (questionEmbedding.length !== referenceIndex.dimensions) {
     throw new Error(

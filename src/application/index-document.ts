@@ -2,6 +2,7 @@ import { chunkText } from "../domain/chunk-text.js";
 import type { DocumentIndex, IndexedChunk } from "../domain/document-index.js";
 import type { EmbeddingGenerator } from "./ports/embedding-generator.js";
 import type { IndexRepository } from "./ports/index-repository.js";
+import { UsageTracker, type ProgressListener } from "./progress.js";
 
 interface IndexDocumentInput {
   source: string;
@@ -13,6 +14,7 @@ interface IndexDocumentInput {
 interface IndexDependencies {
   repository: IndexRepository;
   createEmbeddingGenerator: (model: string) => EmbeddingGenerator;
+  onProgress?: ProgressListener;
 }
 
 export async function indexDocument(
@@ -32,11 +34,17 @@ export async function indexDocument(
   }
 
   const embeddingGenerator = dependencies.createEmbeddingGenerator(embeddingModel);
+  const usageTracker = new UsageTracker(dependencies.onProgress);
   const indexedChunks: IndexedChunk[] = [];
   let expectedDimensions: number | undefined;
 
   for (const [index, chunk] of chunks.entries()) {
-    const embedding = await embeddingGenerator.generate(chunk);
+    const embedding = await embeddingGenerator.generate(chunk, usage =>
+      usageTracker.record("document-embedding", usage, {
+        completed: index + 1,
+        total: chunks.length,
+      }),
+    );
 
     if (embedding.length === 0 || !embedding.every(Number.isFinite)) {
       throw new Error(`Chunk ${index + 1} received an empty embedding or non-finite numbers.`);

@@ -10,6 +10,48 @@ import { OllamaEmbeddingGenerator } from "./infrastructure/ollama/ollama-embeddi
 import { DEFAULT_MIN_SCORE, searchDocuments } from "./application/search-documents.js";
 import { answerQuestion } from "./application/answer-question.js";
 import { OllamaAnswerGenerator } from "./infrastructure/ollama/ollama-answer-generator.js";
+import type { ProgressEvent } from "./application/progress.js";
+
+function formatTokens(count: number | null): string {
+  return count === null ? "unavailable" : String(count);
+}
+
+function createConsoleProgress() {
+  let streamedAnswer = false;
+  let answerLineOpen = false;
+
+  return {
+    onProgress(event: ProgressEvent): void {
+      if (event.type === "answer-text") {
+        if (!streamedAnswer) {
+          process.stdout.write("\n");
+          streamedAnswer = true;
+        }
+        process.stdout.write(event.text);
+        answerLineOpen = true;
+        return;
+      }
+
+      if (answerLineOpen) {
+        process.stdout.write("\n");
+        answerLineOpen = false;
+      }
+      const stage = event.stage === "document-embedding"
+        ? `Document embedding ${event.completed}/${event.total}`
+        : event.stage === "query-embedding" ? "Question embedding" : "Answer generation";
+      const total = event.cumulative.inputTokens === null || event.cumulative.outputTokens === null
+        ? null : event.cumulative.inputTokens + event.cumulative.outputTokens;
+      const output = event.stage === "answer"
+        ? `, output ${formatTokens(event.usage.outputTokens)}` : "";
+      console.log(
+        `Tokens | ${stage} (${event.usage.model}) | ` +
+        `input ${formatTokens(event.usage.inputTokens)}${output} | ` +
+        `operation total ${formatTokens(total)}`,
+      );
+    },
+    get streamedAnswer(): boolean { return streamedAnswer; },
+  };
+}
 
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
@@ -34,6 +76,7 @@ async function main(): Promise<void> {
 
     if (command === "ask") {
       const indexReader = new JsonIndexReader(filePath);
+      const progress = createConsoleProgress();
 
       console.log("Searching for relevant chunks...");
 
@@ -42,9 +85,10 @@ async function main(): Promise<void> {
         createEmbeddingGenerator: (model) =>
           new OllamaEmbeddingGenerator(model),
         answerGenerator: new OllamaAnswerGenerator(),
+        onProgress: progress.onProgress,
       }, 3, minScore);
 
-      console.log(`\n${result.answer}`);
+      if (!progress.streamedAnswer) console.log(`\n${result.answer}`);
 
       if (result.sources.length > 0) {
         console.log("\nChunks provided to the model:");
@@ -64,11 +108,13 @@ async function main(): Promise<void> {
 
     if (command === "search") {
       const indexReader = new JsonIndexReader(filePath);
+      const progress = createConsoleProgress();
 
       const results = await searchDocuments(question, {
         indexReader,
         createEmbeddingGenerator: (model) =>
           new OllamaEmbeddingGenerator(model),
+        onProgress: progress.onProgress,
       }, 3, minScore);
 
       console.log(`Chunks found: ${results.length}`);
@@ -114,6 +160,7 @@ async function main(): Promise<void> {
     }
     const indexPath = join("data", `${parse(filePath).name}.json`);
     const repository: IndexRepository = new JsonIndexRepository(indexPath);
+    const progress = createConsoleProgress();
 
     console.log("Indexing document...");
 
@@ -128,6 +175,7 @@ async function main(): Promise<void> {
         repository,
         createEmbeddingGenerator: (model) =>
           new OllamaEmbeddingGenerator(model),
+        onProgress: progress.onProgress,
       },
     );
 

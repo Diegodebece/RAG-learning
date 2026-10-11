@@ -2,6 +2,80 @@ import type {
   AnswerFragment,
   AnswerGenerator,
 } from "../../application/ports/answer-generator.js";
+import type { UsageListener } from "../../application/ports/model-usage.js";
+import { readUsage } from "./read-usage.js";
+
+async function readStream(
+  response: Response,
+  model: string,
+  onUsage?: UsageListener,
+  onText?: (text: string) => void,
+): Promise<string> {
+  if (response.body === null) {
+    throw new Error("Ollama returned an empty response stream.");
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let answer = "";
+  let finished = false;
+
+  function consume(line: string): void {
+    if (line.trim() === "") return;
+
+    let event: unknown;
+    try {
+      event = JSON.parse(line);
+    } catch {
+      throw new Error("Ollama returned invalid JSON in the response stream.");
+    }
+    if (typeof event !== "object" || event === null) {
+      throw new Error("Ollama returned an invalid response stream event.");
+    }
+
+    const data = event as Record<string, unknown>;
+    if (finished) {
+      throw new Error("Ollama returned data after the final response event.");
+    }
+    if (typeof data.error === "string") {
+      throw new Error(`Ollama stream error: ${data.error}`);
+    }
+    if ("message" in data && data.message !== null && typeof data.message === "object") {
+      const content = (data.message as Record<string, unknown>).content;
+      if (typeof content !== "string") {
+        throw new Error("Ollama returned a response without valid text content.");
+      }
+      answer += content;
+      if (content !== "") onText?.(content);
+    }
+    if (data.done === true) {
+      finished = true;
+      onUsage?.(readUsage(data, model, true));
+    }
+  }
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() ?? "";
+      for (const line of lines) consume(line);
+    }
+    buffer += decoder.decode();
+    consume(buffer);
+  } finally {
+    reader.releaseLock();
+  }
+
+  if (!finished) throw new Error("Ollama ended the response stream before completion.");
+  if (answer.trim() === "") {
+    throw new Error("Ollama returned a response without valid text content.");
+  }
+  return answer.trim();
+}
 
 export class OllamaAnswerGenerator implements AnswerGenerator {
   constructor(
@@ -12,6 +86,8 @@ export class OllamaAnswerGenerator implements AnswerGenerator {
   async generate(
     question: string,
     fragments: AnswerFragment[],
+    onUsage?: UsageListener,
+    onText?: (text: string) => void,
   ): Promise<string> {
     const trimmedQuestion = question.trim();
 
@@ -51,7 +127,7 @@ export class OllamaAnswerGenerator implements AnswerGenerator {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           model: this.model,
-          stream: false,
+          stream: true,
           think: false,
           messages: [
             {
@@ -84,21 +160,13 @@ export class OllamaAnswerGenerator implements AnswerGenerator {
       throw new Error(`Ollama returned HTTP ${response.status}: ${detail}`);
     }
 
-    const data: unknown = await response.json();
-
-    if (
-      typeof data !== "object" ||
-      data === null ||
-      !("message" in data) ||
-      typeof data.message !== "object" ||
-      data.message === null ||
-      !("content" in data.message) ||
-      typeof data.message.content !== "string" ||
-      data.message.content.trim() === ""
-    ) {
-      throw new Error("Ollama returned a response without valid text content.");
+    try {
+      return await readStream(response, this.model, onUsage, onText);
+    } catch (error: unknown) {
+      if (error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError")) {
+        throw new Error("Ollama did not respond within 120 seconds.");
+      }
+      throw error;
     }
-
-    return data.message.content.trim();
   }
 }
