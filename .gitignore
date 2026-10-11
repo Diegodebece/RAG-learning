@@ -1,3 +1,8 @@
 node_modules/
 dist/
+documents/HP1.txt
+documents/The Adventures of Sherlock Holmes.txt
+documents/*.pdf
 data/
+docs/evaluation*.md
+test/evaluation-tools.test.mjs

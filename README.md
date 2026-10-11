@@ -4,6 +4,51 @@
 
 A command-line app in TypeScript that answers questions about your own text documents using a local LLM through [Ollama](https://ollama.com). The retrieval pipeline is written from scratch, with no RAG framework such as LangChain: text chunking, embeddings, cosine-similarity search and answers with citations.
 
+## Local evaluation snapshot
+
+On a local, single-run evaluation of the first Harry Potter novel, the baseline pipeline
+answered **157/199 reviewed questions correctly (78.9%)** with 500-character
+chunks. The same fixed questions and model produced the following results:
+
+| Chunk size | Correct after review | Answerable questions | Unanswerable questions |
+| --- | ---: | ---: | ---: |
+| 500 characters | **157/199 (78.9%)** | 127/159 | 30/40 |
+| 1,000 characters | 152/199 (76.4%) | 126/159 | 26/40 |
+
+The CLI currently fixes indexing at a maximum of **500 characters per chunk**;
+it splits at word boundaries and uses **no overlap**. There is no chunk-size
+option in the CLI yet. For the 1,000-character comparison, a local script
+rebuilt the index with a different size. In both evaluations, `ask` retrieved
+up to three matching chunks and **also sent each match's immediate neighbors**
+to the answer model. Adding neighbors at question time is different from
+overlapping chunks when the index is built. The 200-question scores therefore
+compare chunk sizes, not answers with versus without neighbors.
+
+The set covered all 17 chapters and originally contained 160 answerable and 40
+unanswerable questions. One ambiguous answerable question was excluded from
+both reviewed scores. Review checked factual support and required the exact
+fallback sentence when the document could not answer. The automatic phrase
+scorer alone reported 72% and 70.5%, respectively; it missed valid paraphrases
+and sometimes accepted an answer that included the right term alongside a false
+claim.
+
+The main failure modes were unsupported extra details or contradictions even
+when a relevant chunk was supplied, and failure to abstain on some unanswerable
+questions (10/40 with 500-character chunks). For example, one answer said the
+requested weekday was unspecified while also citing the passage that named it.
+This result describes one book and one run per chunk size, not general accuracy.
+The book, indexes, question set, and raw reports remain local and are not
+distributed with the repository.
+
+An earlier three-question check of adding neighboring chunks showed mixed
+results: it did not recover a decisive passage far from the retrieved matches
+or prevent unsupported claims. Neighbors were retained in the baseline, but
+that small check did not establish an accuracy improvement. Local experiments
+with sentence selection and a structured answerability decision did not
+replace the CLI answer pipeline. In a separate 100-question reviewed comparison,
+the baseline scored 75% and the structured variant 72%; that small local sample
+also cannot establish general accuracy.
+
 ## How it works
 
 1. **Index:** reads a `.txt`, text-based `.pdf`, or `.docx` file, splits it into chunks, generates an embedding for each chunk and saves the index as JSON.
@@ -102,7 +147,7 @@ documents/         sample texts
 - [x] Read and index text-based PDF and DOCX documents
 - [x] Minimum similarity threshold: skip the answer model when no chunk qualifies
 - [ ] Validate citations returned by the model
-- [ ] Evaluation set with expected answers and an accuracy score
+- [x] Run local scored evaluations with answerable and unanswerable questions
 - [ ] Sentence-aware chunking with overlap
 - [ ] Batch indexing of document folders
 - [ ] CI with GitHub Actions
