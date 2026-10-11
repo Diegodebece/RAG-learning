@@ -55,6 +55,12 @@ also cannot establish general accuracy.
 2. **Search:** loads a JSON index or a folder of indexes, embeds the question once and returns the most similar chunks across all documents that meet the minimum similarity score.
 3. **Ask:** adds the previous and next chunk for each search match, removes duplicates, and sends the context to the LLM. The model is instructed to answer briefly in English **using only those chunks** and cite them as `[F1]`, `[F2]`. If no search match meets the threshold, the app reports that without calling the answer model. The prompt also tells the model to treat document text as data and ignore any instructions inside it.
 
+The CLI reports token usage after each Ollama call. Indexing shows input tokens
+per chunk and the running total; search shows question-embedding tokens; ask
+also streams answer text and then shows chat input, output, and operation totals.
+If Ollama does not provide a count, the CLI displays `unavailable` rather than
+estimating it from text length or embedding dimensions.
+
 ## Tech
 
 - TypeScript (strict) on Node.js, with `pdf-parse` for PDF and `mammoth` for DOCX text extraction

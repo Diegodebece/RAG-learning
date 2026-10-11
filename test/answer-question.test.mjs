@@ -80,6 +80,36 @@ test("generates an answer using the retrieved fragments and returns their source
   assert.deepEqual(sourcesWithoutIds, request.fragments);
 });
 
+test("streams answer events and accumulates query and answer tokens", async () => {
+  const { dependencies } = makeDependencies();
+  const events = [];
+  dependencies.onProgress = event => events.push(event);
+  dependencies.createEmbeddingGenerator = () => ({
+    async generate(_text, onUsage) {
+      onUsage({ model: "embedding-model", inputTokens: 5, outputTokens: 0 });
+      return [1, 0];
+    },
+  });
+  dependencies.answerGenerator.generate = async (_question, _fragments, onUsage, onText) => {
+    onText("Hello ");
+    onText("world [F1]");
+    onUsage({ model: "answer-model", inputTokens: 40, outputTokens: 3 });
+    return "Hello world [F1]";
+  };
+
+  const result = await answerQuestion("Question", dependencies);
+
+  assert.equal(result.answer, "Hello world [F1]");
+  assert.deepEqual(events.map(event => event.type === "answer-text"
+    ? [event.type, event.text]
+    : [event.stage, event.usage.model, event.cumulative]), [
+    ["query-embedding", "embedding-model", { inputTokens: 5, outputTokens: 0 }],
+    ["answer-text", "Hello "],
+    ["answer-text", "world [F1]"],
+    ["answer", "answer-model", { inputTokens: 45, outputTokens: 3 }],
+  ]);
+});
+
 test("limits search matches while adding their adjacent chunks without loading twice", async () => {
   const { dependencies, calls } = makeDependencies();
 

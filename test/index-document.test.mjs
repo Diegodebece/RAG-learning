@@ -58,6 +58,33 @@ test("builds and saves a complete index with the configured model and chunk size
   assert.deepEqual(calls.events, ["generate:uno dos", "generate:tres", "save"]);
 });
 
+test("reports embedding tokens after each chunk without storing usage in the index", async () => {
+  const { dependencies } = makeDependencies();
+  const events = [];
+  dependencies.onProgress = event => events.push(event);
+  let count = 0;
+  dependencies.createEmbeddingGenerator = () => ({
+    async generate(_text, onUsage) {
+      count++;
+      onUsage({ model: "test-model", inputTokens: count * 4, outputTokens: 0 });
+      return [0.1, 0.2];
+    },
+  });
+
+  const result = await indexDocument(input, dependencies);
+
+  assert.deepEqual(events.map(event => ({
+    stage: event.stage,
+    progress: `${event.completed}/${event.total}`,
+    input: event.usage.inputTokens,
+    cumulative: event.cumulative,
+  })), [
+    { stage: "document-embedding", progress: "1/2", input: 4, cumulative: { inputTokens: 4, outputTokens: 0 } },
+    { stage: "document-embedding", progress: "2/2", input: 8, cumulative: { inputTokens: 12, outputTokens: 0 } },
+  ]);
+  assert.equal("usage" in result, false);
+});
+
 test("defaults to 500 characters without overlap", async () => {
   const { dependencies } = makeDependencies();
   const result = await indexDocument({

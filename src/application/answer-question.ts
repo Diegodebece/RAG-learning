@@ -3,6 +3,7 @@ import type { AnswerFragment } from "./ports/answer-generator.js";
 import type { EmbeddingGenerator } from "./ports/embedding-generator.js";
 import type { IndexReader } from "./ports/index-reader.js";
 import { DEFAULT_MIN_SCORE, searchDocumentsWithIndexes } from "./search-documents.js";
+import { UsageTracker, type ProgressListener } from "./progress.js";
 
 export interface AnswerSource extends AnswerFragment {
   id: string;
@@ -19,6 +20,7 @@ interface AnswerDependencies {
   indexReader: IndexReader;
   createEmbeddingGenerator: (model: string) => EmbeddingGenerator;
   answerGenerator: AnswerGenerator;
+  onProgress?: ProgressListener;
 }
 
 export async function answerQuestion(
@@ -27,6 +29,7 @@ export async function answerQuestion(
   limit: number = 3,
   minScore: number = DEFAULT_MIN_SCORE,
 ): Promise<AnswerResult> {
+  const usageTracker = new UsageTracker(dependencies.onProgress);
   const { results, indexes } = await searchDocumentsWithIndexes(
     question,
     {
@@ -35,6 +38,7 @@ export async function answerQuestion(
     },
     limit,
     minScore,
+    usageTracker,
   );
 
   if (results.length === 0) {
@@ -70,7 +74,12 @@ export async function answerQuestion(
     }
   }
 
-  const answer = await dependencies.answerGenerator.generate(question.trim(), fragments);
+  const answer = await dependencies.answerGenerator.generate(
+    question.trim(),
+    fragments,
+    usage => usageTracker.record("answer", usage),
+    text => usageTracker.answerText(text),
+  );
   const sources: AnswerSource[] = fragments.map((fragment, position) => ({
     ...fragment,
     id: `F${position + 1}`,

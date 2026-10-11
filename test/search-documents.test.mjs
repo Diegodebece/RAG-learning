@@ -71,6 +71,23 @@ test("returns the top three fragments using the stored model", async () => {
   assert.deepEqual(documentIndex, original);
 });
 
+test("reports query embedding usage even when no result meets the threshold", async () => {
+  const { dependencies } = makeDependencies();
+  const events = [];
+  dependencies.onProgress = event => events.push(event);
+  dependencies.createEmbeddingGenerator = () => ({
+    async generate(_text, onUsage) {
+      onUsage({ model: "test-model", inputTokens: 6, outputTokens: 0 });
+      return [0, -1];
+    },
+  });
+
+  assert.deepEqual(await searchDocuments("Question", dependencies, 3, 0.9), []);
+  assert.deepEqual(events.map(event => [event.stage, event.cumulative]), [
+    ["query-embedding", { inputTokens: 6, outputTokens: 0 }],
+  ]);
+});
+
 test("respects the limit without inventing additional results", async () => {
   const { dependencies } = makeDependencies();
 

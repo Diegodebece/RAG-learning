@@ -14,10 +14,12 @@ test("sends a whole fragment to Ollama and returns its vector", async (t) => {
       input: fragment,
       truncate: false,
     });
-    return Response.json({ embeddings: [[0.12, -0.45, 0.08]] });
+    return Response.json({ embeddings: [[0.12, -0.45, 0.08]], prompt_eval_count: 9 });
   });
 
-  assert.deepEqual(await new OllamaEmbeddingGenerator().generate(fragment), [0.12, -0.45, 0.08]);
+  const usage = [];
+  assert.deepEqual(await new OllamaEmbeddingGenerator().generate(fragment, value => usage.push(value)), [0.12, -0.45, 0.08]);
+  assert.deepEqual(usage, [{ model: "qwen3-embedding:0.6b", inputTokens: 9, outputTokens: 0 }]);
 });
 
 test("allows changing the model and server address", async (t) => {
@@ -28,7 +30,9 @@ test("allows changing the model and server address", async (t) => {
   });
 
   const generator = new OllamaEmbeddingGenerator("another-model", "http://localhost:12345");
-  assert.deepEqual(await generator.generate("texto"), [0.5]);
+  const usage = [];
+  assert.deepEqual(await generator.generate("texto", value => usage.push(value)), [0.5]);
+  assert.deepEqual(usage, [{ model: "another-model", inputTokens: null, outputTokens: 0 }]);
 });
 
 test("rejects malformed or ambiguous vectors", async (t) => {
